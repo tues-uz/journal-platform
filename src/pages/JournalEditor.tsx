@@ -1,5 +1,18 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import UnderlineExtension from "@tiptap/extension-underline";
+import TextAlign from "@tiptap/extension-text-align";
+import LinkExtension from "@tiptap/extension-link";
+import TextStyle from "@tiptap/extension-text-style";
+import Color from "@tiptap/extension-color";
+import ImageExtension from "@tiptap/extension-image";
+import Placeholder from "@tiptap/extension-placeholder";
+import TableExtension from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableHeader from "@tiptap/extension-table-header";
+import TableCell from "@tiptap/extension-table-cell";
 import {
   Bold,
   Italic,
@@ -46,52 +59,75 @@ import {
 } from "@/components/ui/dropdown-menu";
 import JournalDashboardSidebar from "@/components/JournalDashboardSidebar";
 import { useToast } from "@/hooks/use-toast";
+import { routes } from "@/app/routes";
+import { useSidebarLayout } from "@/features/layout/useSidebarLayout";
+import { useEditorState } from "@/features/editor/hooks/useEditorState";
+import {
+  execEditorCommand,
+  insertCodeBlock as insertCodeBlockCommand,
+  insertHeading as insertHeadingCommand,
+  insertHorizontalRule as insertHorizontalRuleCommand,
+  insertImage as insertImageCommand,
+  insertQuote as insertQuoteCommand,
+  insertTable as insertTableCommand,
+} from "@/features/editor/services/editorCommands";
 
 const JournalEditor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const editorRef = useRef<HTMLDivElement>(null);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    const saved = localStorage.getItem("journalSidebarCollapsed");
-    return saved === "true";
+  const { isCollapsed: isSidebarCollapsed } = useSidebarLayout();
+
+  const {
+    title,
+    setTitle,
+    subtitle,
+    setSubtitle,
+    category,
+    setCategory,
+    tags,
+    setTags,
+    content,
+    setContent,
+    isSaving,
+    setIsSaving,
+    fontSize,
+    lineHeight,
+    showColorPicker,
+    setShowColorPicker,
+    textColor,
+    setTextColor,
+    categories,
+    adjustFontSize,
+  } = useEditorState();
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      UnderlineExtension,
+      TextStyle,
+      Color,
+      LinkExtension.configure({ openOnClick: false, autolink: true }),
+      ImageExtension,
+      Placeholder.configure({ placeholder: "Start writing your article here..." }),
+      TextAlign.configure({
+        types: ["heading", "paragraph"],
+      }),
+      TableExtension.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+    ],
+    content: "<p></p>",
+    onUpdate({ editor: currentEditor }) {
+      setContent(currentEditor.getHTML());
+    },
+    editorProps: {
+      attributes: {
+        class: "min-h-[600px] outline-none prose prose-lg max-w-none",
+      },
+    },
   });
-
-  const [title, setTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [category, setCategory] = useState("");
-  const [tags, setTags] = useState("");
-  const [content, setContent] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [fontSize, setFontSize] = useState(21);
-  const [lineHeight, setLineHeight] = useState(1.58);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [textColor, setTextColor] = useState("#000000");
-
-  const categories = [
-    "Macroeconomics",
-    "Microeconomics",
-    "Policy & Reform",
-    "Data Analysis",
-    "Behavioral Economics",
-    "International Trade",
-    "Development Economics",
-    "Financial Markets",
-    "Public Policy",
-    "Research",
-  ];
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      const saved = localStorage.getItem("journalSidebarCollapsed");
-      setIsSidebarCollapsed(saved === "true");
-    };
-
-    checkSidebarState();
-    const interval = setInterval(checkSidebarState, 100);
-
-    return () => clearInterval(interval);
-  }, []);
 
   // Load existing article if editing
   useEffect(() => {
@@ -101,177 +137,61 @@ const JournalEditor = () => {
       setSubtitle("A compelling subtitle that draws readers in");
       setCategory("Macroeconomics");
       setTags("economics, policy, research");
-      setContent("<p>Start writing your article here...</p>");
+      const seededContent = "<p>Start writing your article here...</p>";
+      setContent(seededContent);
+      editor?.commands.setContent(seededContent, false);
+      return;
     }
-  }, [id]);
-
-  // Hide placeholder on initial load if content exists
-  useEffect(() => {
-    if (editorRef.current && content && content !== '<p class="text-gray-400 editor-placeholder">Start writing your article here...</p>') {
-      const placeholder = editorRef.current.querySelector('.editor-placeholder');
-      if (placeholder) {
-        placeholder.style.display = 'none';
-      }
-    }
-  }, [content]);
-
-  const handleEditorInput = () => {
-    if (editorRef.current) {
-      const htmlContent = editorRef.current.innerHTML;
-      setContent(htmlContent);
-      
-      // Hide/show placeholder based on content
-      const textContent = editorRef.current.textContent?.trim() || '';
-      const placeholder = editorRef.current.querySelector('.editor-placeholder');
-      
-      if (placeholder) {
-        // Hide if there's actual content (not just the placeholder)
-        const hasRealContent = textContent.length > 0 && 
-          !textContent.includes('Start writing your article here...');
-        placeholder.style.display = hasRealContent ? 'none' : 'block';
-      }
-    }
-  };
-
-  const handleEditorFocus = () => {
-    if (editorRef.current) {
-      const textContent = editorRef.current.textContent?.trim() || '';
-      const placeholder = editorRef.current.querySelector('.editor-placeholder');
-      
-      if (placeholder) {
-        // If only placeholder text exists, remove it when focused
-        if (textContent === 'Start writing your article here...') {
-          editorRef.current.innerHTML = '<p><br></p>';
-          editorRef.current.focus();
-        } else if (textContent.length > 0) {
-          placeholder.style.display = 'none';
-        }
-      }
-    }
-  };
-
-  const handleEditorBlur = () => {
-    if (editorRef.current) {
-      const textContent = editorRef.current.textContent?.trim() || '';
-      const placeholder = editorRef.current.querySelector('.editor-placeholder');
-      
-      if (placeholder) {
-        // Show placeholder only if editor is empty
-        if (textContent.length === 0 || textContent === '') {
-          if (!editorRef.current.querySelector('.editor-placeholder')) {
-            editorRef.current.innerHTML = '<p class="text-gray-400 editor-placeholder">Start writing your article here...</p>';
-          } else {
-            placeholder.style.display = 'block';
-          }
-        } else {
-          placeholder.style.display = 'none';
-        }
-      }
-    }
-  };
+    editor?.commands.setContent("<p></p>", false);
+    setContent("");
+  }, [id, editor, setTitle, setSubtitle, setCategory, setTags, setContent]);
 
   const execCommand = (command: string, value: string | null = null) => {
-    document.execCommand(command, false, value || undefined);
-    if (editorRef.current) {
-      editorRef.current.focus();
-      setContent(editorRef.current.innerHTML);
-    }
+    execEditorCommand(editor, command, setContent, value);
   };
 
   const insertHeading = (level: number) => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const heading = document.createElement(`h${level}`);
-      heading.textContent = selection.toString() || `Heading ${level}`;
-      range.deleteContents();
-      range.insertNode(heading);
-      setContent(editorRef.current?.innerHTML || "");
-    }
+    insertHeadingCommand(editor, level, setContent);
   };
 
   const insertCodeBlock = () => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const codeBlock = document.createElement("pre");
-      codeBlock.className = "bg-gray-100 p-4 rounded-lg my-4 overflow-x-auto";
-      const code = document.createElement("code");
-      code.textContent = selection.toString() || "// Your code here";
-      codeBlock.appendChild(code);
-      range.deleteContents();
-      range.insertNode(codeBlock);
-      setContent(editorRef.current?.innerHTML || "");
-    }
+    insertCodeBlockCommand(editor, setContent);
   };
 
   const insertHorizontalRule = () => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const hr = document.createElement("hr");
-      hr.className = "my-8 border-gray-300";
-      range.insertNode(hr);
-      setContent(editorRef.current?.innerHTML || "");
-    }
+    insertHorizontalRuleCommand(editor, setContent);
   };
 
   const insertTable = () => {
     const rows = prompt("Number of rows:", "3");
     const cols = prompt("Number of columns:", "3");
-    if (rows && cols) {
-      const table = document.createElement("table");
-      table.className = "border-collapse border border-gray-300 my-4 w-full";
-      
-      for (let i = 0; i < parseInt(rows); i++) {
-        const tr = document.createElement("tr");
-        for (let j = 0; j < parseInt(cols); j++) {
-          const td = document.createElement(i === 0 ? "th" : "td");
-          td.className = "border border-gray-300 p-2";
-          td.textContent = i === 0 ? `Header ${j + 1}` : `Cell ${i},${j + 1}`;
-          tr.appendChild(td);
-        }
-        table.appendChild(tr);
-      }
-      
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        range.insertNode(table);
-        setContent(editorRef.current?.innerHTML || "");
-      }
-    }
+    if (!rows || !cols) return;
+
+    const parsedRows = Number.parseInt(rows, 10);
+    const parsedCols = Number.parseInt(cols, 10);
+    insertTableCommand(editor, setContent, parsedRows, parsedCols);
   };
 
   const insertCallout = (type: string = "info") => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const callout = document.createElement("div");
-      const bgColors: Record<string, string> = {
-        info: "bg-blue-50 border-blue-200",
-        warning: "bg-yellow-50 border-yellow-200",
-        success: "bg-green-50 border-green-200",
-        error: "bg-red-50 border-red-200",
-      };
-      callout.className = `p-4 rounded-lg border-l-4 my-4 ${bgColors[type] || bgColors.info}`;
-      callout.textContent = selection.toString() || "Callout text";
-      range.deleteContents();
-      range.insertNode(callout);
-      setContent(editorRef.current?.innerHTML || "");
+    if (!editor) return;
+
+    const bgColors: Record<string, string> = {
+      info: "bg-blue-50 border-blue-200",
+      warning: "bg-yellow-50 border-yellow-200",
+      success: "bg-green-50 border-green-200",
+      error: "bg-red-50 border-red-200",
+    };
+
+    const className = bgColors[type] || bgColors.info;
+    const contentBlock = `<div class="p-4 rounded-lg border-l-4 my-4 ${className}">Callout text</div>`;
+    const executed = editor.chain().focus().insertContent(contentBlock).run();
+    if (executed) {
+      setContent(editor.getHTML());
     }
   };
 
   const insertQuote = () => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const blockquote = document.createElement("blockquote");
-      blockquote.textContent = selection.toString() || "Quote";
-      range.deleteContents();
-      range.insertNode(blockquote);
-      setContent(editorRef.current?.innerHTML || "");
-    }
+    insertQuoteCommand(editor, setContent);
   };
 
   const insertLink = () => {
@@ -283,19 +203,7 @@ const JournalEditor = () => {
 
   const insertImage = () => {
     const url = prompt("Enter image URL:");
-    if (url) {
-      const img = document.createElement("img");
-      img.src = url;
-      img.className = "max-w-full h-auto rounded-lg my-4";
-      img.alt = "Article image";
-      
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        range.insertNode(img);
-        setContent(editorRef.current?.innerHTML || "");
-      }
-    }
+    if (url) insertImageCommand(editor, setContent, url);
   };
 
   const handleSave = async (publish: boolean = false) => {
@@ -330,17 +238,9 @@ const JournalEditor = () => {
       });
       
       if (publish) {
-        navigate("/journal/dashboard");
+        navigate(routes.dashboard);
       }
     }, 1000);
-  };
-
-  const adjustFontSize = (increase: boolean) => {
-    if (editorRef.current) {
-      const newSize = increase ? fontSize + 1 : Math.max(16, fontSize - 1);
-      setFontSize(newSize);
-      editorRef.current.style.fontSize = `${newSize}px`;
-    }
   };
 
   const changeTextColor = (color: string) => {
@@ -623,7 +523,7 @@ const JournalEditor = () => {
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => navigate("/journal/dashboard")}
+                  onClick={() => navigate(routes.dashboard)}
                   title="Preview"
                   className="h-9 w-9 flex-shrink-0"
                 >
@@ -720,20 +620,13 @@ const JournalEditor = () => {
           {/* Rich Text Editor */}
           <div className="py-8">
             <div
-              ref={editorRef}
-              contentEditable
-              onInput={handleEditorInput}
-              onFocus={handleEditorFocus}
-              onBlur={handleEditorBlur}
-              className="min-h-[600px] outline-none prose prose-lg max-w-none"
               style={{
                 fontSize: `${fontSize}px`,
                 lineHeight: lineHeight,
                 fontFamily: "'Nunito', sans-serif",
               }}
-              suppressContentEditableWarning
             >
-              <p className="text-gray-400 editor-placeholder">Start writing your article here...</p>
+              <EditorContent editor={editor} />
             </div>
           </div>
 

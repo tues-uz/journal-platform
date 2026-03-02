@@ -2,22 +2,24 @@ import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Search, BookOpen } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { routes } from "@/app/routes";
+import { prefetchRoute } from "@/app/prefetch";
 
 const JournalHeader = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
 
   const navItems = [
-    { name: "Home", path: "/journal" },
-    { name: "Articles", path: "/journal/articles" },
-    { name: "Authors", path: "/journal/authors" },
-    { name: "Topics", path: "/journal/topics" },
-    { name: "About", path: "/journal/about" },
+    { name: "Home", path: routes.home },
+    { name: "Articles", path: routes.articles },
+    { name: "Authors", path: routes.authors },
+    { name: "Topics", path: routes.topics },
+    { name: "About", path: routes.about },
   ];
 
   const isActive = (path: string) => {
-    if (path === "/journal") {
-      return location.pathname === "/journal";
+    if (path === routes.home) {
+      return location.pathname === routes.home;
     }
     return location.pathname.startsWith(path);
   };
@@ -27,7 +29,7 @@ const JournalHeader = () => {
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/journal" className="flex items-center gap-2">
+          <Link to={routes.home} className="flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-gray-900" />
             <span className="text-lg font-bold text-gray-900">TUES Journal</span>
           </Link>
@@ -57,7 +59,7 @@ const JournalHeader = () => {
             </button>
 
             {/* Login Button */}
-            <Link to="/journal/signin">
+            <Link to={routes.signin} onMouseEnter={() => void prefetchRoute(routes.signin)}>
               <Button 
                 variant="ghost" 
                 className="hidden md:flex text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-full px-4 py-2 text-sm font-medium"
@@ -67,7 +69,7 @@ const JournalHeader = () => {
             </Link>
 
             {/* Register Button */}
-            <Link to="/register">
+            <Link to={routes.register} onMouseEnter={() => void prefetchRoute(routes.signin)}>
               <Button className="hidden md:flex bg-gray-900 text-white hover:bg-gray-800 rounded-full px-4 py-2 text-sm font-medium">
                 Get Started
               </Button>
@@ -104,12 +106,20 @@ const JournalHeader = () => {
                 </Link>
               ))}
               <div className="pt-4 border-t border-gray-200 space-y-2">
-                <Link to="/journal/signin" onClick={() => setMobileMenuOpen(false)}>
+                <Link
+                  to={routes.signin}
+                  onMouseEnter={() => void prefetchRoute(routes.signin)}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
                   <Button className="w-full text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-full">
                     Sign In
                   </Button>
                 </Link>
-                <Link to="/register" onClick={() => setMobileMenuOpen(false)}>
+                <Link
+                  to={routes.register}
+                  onMouseEnter={() => void prefetchRoute(routes.signin)}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
                   <Button className="w-full bg-gray-900 text-white hover:bg-gray-800 rounded-full">
                     Get Started
                   </Button>

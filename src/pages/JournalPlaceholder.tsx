@@ -3,6 +3,7 @@ import JournalHeader from "@/components/JournalHeader";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { FileText, Users, Tag, Info, ArrowLeft } from "lucide-react";
+import { routes } from "@/app/routes";
 
 const JOURNAL_PLACEHOLDER_CONFIG: Record<string, { icon: typeof FileText; title: string }> = {
   articles: { icon: FileText, title: "Articles" },
@@ -27,7 +28,7 @@ const JournalPlaceholder = () => {
         </div>
         <h1 className="text-2xl font-bold text-foreground mb-2">{title}</h1>
         <p className="text-foreground/60 mb-6 max-w-sm text-center">This section is coming soon.</p>
-        <Link to="/journal">
+        <Link to={routes.home}>
           <Button variant="outline" className="rounded-full">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Journal
