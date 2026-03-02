@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import JournalHeader from "@/components/JournalHeader";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/features/auth/useAuth";
+import { routes } from "@/app/routes";
+import { prefetchRoute } from "@/app/prefetch";
+import {
+  getNextRedirectProgress,
+  getRedirectFeedback,
+  runPostSignInRedirect,
+} from "@/features/auth/signInFlow";
 
 // Dummy account credentials
 const DUMMY_ACCOUNTS = [
@@ -99,13 +107,40 @@ const JournalSignIn = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [redirectStatus, setRedirectStatus] = useState<"idle" | "prefetching" | "navigating">("idle");
+  const [displayProgress, setDisplayProgress] = useState(15);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { login } = useAuth();
+  const redirectFeedback = getRedirectFeedback(redirectStatus);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setDisplayProgress(getRedirectFeedback("idle").progress);
+      return;
+    }
+
+    const target = redirectStatus === "prefetching" ? 95 : redirectFeedback.progress;
+    if (redirectStatus !== "prefetching") {
+      setDisplayProgress(target);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setDisplayProgress((current) => getNextRedirectProgress(current, target));
+    }, 120);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isLoading, redirectFeedback.progress, redirectStatus]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
+    setRedirectStatus("idle");
+    setDisplayProgress(getRedirectFeedback("idle").progress);
 
     // Simulate API call delay
     setTimeout(() => {
@@ -115,19 +150,26 @@ const JournalSignIn = () => {
       );
 
       if (account) {
-        // Store user info in localStorage
-        localStorage.setItem("userName", account.name);
-        localStorage.setItem("userEmail", account.email);
+        login(account.name, account.email);
         
         // Success - show toast and redirect
         toast({
           title: "Welcome back!",
           description: `Successfully signed in as ${account.name}`,
         });
-        setIsLoading(false);
         // Redirect to Journal Dashboard after a short delay
         setTimeout(() => {
-          navigate("/journal/dashboard");
+          void runPostSignInRedirect(prefetchRoute, navigate, routes.dashboard, (status) => {
+            setRedirectStatus(status);
+          }).catch(() => {
+            setIsLoading(false);
+            setRedirectStatus("idle");
+            toast({
+              title: "Unable to open dashboard",
+              description: "Please try again.",
+              variant: "destructive",
+            });
+          });
         }, 500);
       } else {
         // Error - show error message
@@ -232,14 +274,6 @@ const JournalSignIn = () => {
                     </p>
                   </div>
 
-            {/* Error Message */}
-            {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-red-700 flex-1">{error}</p>
-              </div>
-            )}
-
                   {/* Error Message */}
                   {error && (
                     <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
@@ -339,12 +373,27 @@ const JournalSignIn = () => {
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
-                          Signing in...
+                          {redirectFeedback.label}
                         </span>
                       ) : (
                         "Sign In"
                       )}
                     </Button>
+                    {isLoading && (
+                      <div className="space-y-2" aria-live="polite">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                          <div
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={displayProgress}
+                            className="h-full rounded-full bg-gray-900 transition-all duration-300"
+                            style={{ width: `${displayProgress}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500 text-center">{redirectFeedback.label}</p>
+                      </div>
+                    )}
                   </form>
 
                   {/* Divider */}
@@ -391,7 +440,7 @@ const JournalSignIn = () => {
                     <p className="text-gray-600 text-sm">
                       Don't have an account?{" "}
                       <Link
-                        to="/register"
+                        to={routes.register}
                         className="text-gray-900 hover:text-gray-700 font-semibold transition-colors hover:underline"
                       >
                         Get started

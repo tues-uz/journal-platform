@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -19,39 +19,31 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/features/auth/useAuth";
+import { routes } from "@/app/routes";
+import { prefetchRoute } from "@/app/prefetch";
+import { useSidebarLayout } from "@/features/layout/useSidebarLayout";
 
 const JournalDashboardSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    const saved = localStorage.getItem("journalSidebarCollapsed");
-    return saved === "true";
-  });
+  const { user, logout } = useAuth();
+  const { isCollapsed, toggleCollapsed } = useSidebarLayout();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  const userName = localStorage.getItem("userName") || "User";
-  const userEmail = localStorage.getItem("userEmail") || "";
+  const userName = user?.name ?? "User";
+  const userEmail = user?.email ?? "";
 
   // Determine user role
   const isKurator = userEmail.includes("kurator") || userEmail.includes("editor") || userEmail.includes("reviewer");
 
-  useEffect(() => {
-    const saved = localStorage.getItem("journalSidebarCollapsed");
-    if (saved !== null) {
-      setIsCollapsed(saved === "true");
-    }
-  }, []);
-
   const toggleSidebar = () => {
-    const newState = !isCollapsed;
-    setIsCollapsed(newState);
-    localStorage.setItem("journalSidebarCollapsed", String(newState));
+    toggleCollapsed();
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("userName");
-    localStorage.removeItem("userEmail");
-    navigate("/journal/signin");
+    logout();
+    navigate(routes.signin);
   };
 
   // Journal Maker Menu Items
@@ -59,32 +51,32 @@ const JournalDashboardSidebar = () => {
     {
       icon: LayoutDashboard,
       label: "Dashboard",
-      path: "/journal/dashboard",
+      path: routes.dashboard,
     },
     {
       icon: FileText,
       label: "My Articles",
-      path: "/journal/dashboard/articles",
+      path: `${routes.dashboard}/articles`,
     },
     {
       icon: Send,
       label: "Submissions",
-      path: "/journal/dashboard/submissions",
+      path: `${routes.dashboard}/submissions`,
     },
     {
       icon: Edit,
       label: "Drafts",
-      path: "/journal/dashboard/drafts",
+      path: `${routes.dashboard}/drafts`,
     },
     {
       icon: CheckCircle2,
       label: "Accepted",
-      path: "/journal/dashboard/accepted",
+      path: `${routes.dashboard}/accepted`,
     },
     {
       icon: Clock,
       label: "Under Review",
-      path: "/journal/dashboard/review",
+      path: `${routes.dashboard}/review`,
     },
   ];
 
@@ -93,45 +85,45 @@ const JournalDashboardSidebar = () => {
     {
       icon: LayoutDashboard,
       label: "Dashboard",
-      path: "/journal/dashboard",
+      path: routes.dashboard,
     },
     {
       icon: FileText,
       label: "Pending Review",
-      path: "/journal/dashboard/pending",
+      path: `${routes.dashboard}/pending`,
     },
     {
       icon: CheckCircle2,
       label: "Accepted",
-      path: "/journal/dashboard/accepted",
+      path: `${routes.dashboard}/accepted`,
     },
     {
       icon: XCircle,
       label: "Rejected",
-      path: "/journal/dashboard/rejected",
+      path: `${routes.dashboard}/rejected`,
     },
     {
       icon: Clock,
       label: "Under Review",
-      path: "/journal/dashboard/review",
+      path: `${routes.dashboard}/review`,
     },
     {
       icon: Users,
       label: "Authors",
-      path: "/journal/dashboard/authors",
+      path: `${routes.dashboard}/authors`,
     },
     {
       icon: BarChart3,
       label: "Analytics",
-      path: "/journal/dashboard/analytics",
+      path: `${routes.dashboard}/analytics`,
     },
   ];
 
   const menuItems = isKurator ? kuratorMenuItems : makerMenuItems;
 
   const isActive = (path: string) => {
-    if (path === "/journal/dashboard") {
-      return location.pathname === "/journal/dashboard";
+    if (path === routes.dashboard) {
+      return location.pathname === routes.dashboard;
     }
     return location.pathname.startsWith(path);
   };
@@ -170,13 +162,21 @@ const JournalDashboardSidebar = () => {
           <div className="p-4 relative">
             <div className="flex items-center gap-2">
               {!isCollapsed && (
-                <Link to="/journal/dashboard" className="flex items-center gap-2 flex-1">
+                <Link
+                  to={routes.dashboard}
+                  onMouseEnter={() => void prefetchRoute(routes.dashboard)}
+                  className="flex items-center gap-2 flex-1"
+                >
                   <BookOpen className="h-6 w-6 text-gray-900" />
                   <span className="text-lg font-bold text-gray-900">TUES Journal</span>
                 </Link>
               )}
               {isCollapsed && (
-                <Link to="/journal/dashboard" className="flex items-center justify-center flex-1">
+                <Link
+                  to={routes.dashboard}
+                  onMouseEnter={() => void prefetchRoute(routes.dashboard)}
+                  className="flex items-center justify-center flex-1"
+                >
                   <BookOpen className="h-6 w-6 text-gray-900" />
                 </Link>
               )}
@@ -223,6 +223,7 @@ const JournalDashboardSidebar = () => {
                   <Link
                     key={item.path}
                     to={item.path}
+                    onMouseEnter={() => void prefetchRoute(routes.dashboard)}
                     onClick={() => setIsMobileOpen(false)}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                       active
@@ -243,16 +244,17 @@ const JournalDashboardSidebar = () => {
           {/* Footer */}
           <div className="p-4 space-y-2">
             <Link
-              to="/journal/dashboard/settings"
+              to={`${routes.dashboard}/settings`}
+              onMouseEnter={() => void prefetchRoute(routes.dashboard)}
               onClick={() => setIsMobileOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                location.pathname === "/journal/dashboard/settings"
+                location.pathname === `${routes.dashboard}/settings`
                   ? "bg-gray-900 text-white"
                   : "text-gray-700 hover:bg-gray-100"
               }`}
             >
               <Settings className={`h-5 w-5 flex-shrink-0 ${
-                location.pathname === "/journal/dashboard/settings" ? "text-white" : "text-gray-500"
+                location.pathname === `${routes.dashboard}/settings` ? "text-white" : "text-gray-500"
               }`} />
               {!isCollapsed && <span className="text-sm font-medium">Settings</span>}
             </Link>
