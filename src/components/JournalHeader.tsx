@@ -69,7 +69,7 @@ const JournalHeader = () => {
             </Link>
 
             {/* Register Button */}
-            <Link to={routes.register} onMouseEnter={() => void prefetchRoute(routes.signin)}>
+            <Link to={routes.register} onMouseEnter={() => void prefetchRoute(routes.register)}>
               <Button className="hidden md:flex bg-gray-900 text-white hover:bg-gray-800 rounded-full px-4 py-2 text-sm font-medium">
                 Get Started
               </Button>

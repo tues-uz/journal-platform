@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,92 +14,16 @@ import {
   getRedirectFeedback,
   runPostSignInRedirect,
 } from "@/features/auth/signInFlow";
+import { useJournalStore } from "@/lib/store/store";
+import { SEED_USERS } from "@/lib/store/seed";
+import { ROLE_LABELS } from "@/lib/rbac/types";
 
-// Dummy account credentials
-const DUMMY_ACCOUNTS = [
-  // Journal Maker (Author/Submitter) Accounts
-  {
-    email: "maker@tuesjournal.com",
-    password: "maker123",
-    name: "Journal Maker",
-  },
-  {
-    email: "author@tuesjournal.com",
-    password: "author123",
-    name: "Journal Author",
-  },
-  {
-    email: "researcher@tuesjournal.com",
-    password: "researcher123",
-    name: "Research Scholar",
-  },
-  {
-    email: "student@tuesjournal.com",
-    password: "student123",
-    name: "Student Researcher",
-  },
-  {
-    email: "professor@tuesjournal.com",
-    password: "professor123",
-    name: "Professor Smith",
-  },
-  {
-    email: "economist@tuesjournal.com",
-    password: "economist123",
-    name: "Dr. Economist",
-  },
-  {
-    email: "scholar@tuesjournal.com",
-    password: "scholar123",
-    name: "Academic Scholar",
-  },
-  {
-    email: "writer@tuesjournal.com",
-    password: "writer123",
-    name: "Research Writer",
-  },
-  // Journal Kurator (Curator/Editor/Reviewer) Accounts
-  {
-    email: "kurator@tuesjournal.com",
-    password: "kurator123",
-    name: "Journal Kurator",
-  },
-  {
-    email: "editor@tuesjournal.com",
-    password: "editor123",
-    name: "Journal Editor",
-  },
-  {
-    email: "reviewer@tuesjournal.com",
-    password: "reviewer123",
-    name: "Journal Reviewer",
-  },
-  {
-    email: "chief.editor@tuesjournal.com",
-    password: "chief123",
-    name: "Chief Editor",
-  },
-  {
-    email: "senior.editor@tuesjournal.com",
-    password: "senior123",
-    name: "Senior Editor",
-  },
-  {
-    email: "associate.editor@tuesjournal.com",
-    password: "associate123",
-    name: "Associate Editor",
-  },
-  {
-    email: "peer.reviewer@tuesjournal.com",
-    password: "peer123",
-    name: "Peer Reviewer",
-  },
-  {
-    email: "academic.reviewer@tuesjournal.com",
-    password: "academic123",
-    name: "Academic Reviewer",
-  },
-];
+const DEMO_ACCOUNTS = SEED_USERS.filter((u) => u.status === "active").map((u) => ({
+  email: u.email,
+  password: u.password,
+  name: u.name,
+  roles: u.roles.map((r) => ROLE_LABELS[r]).join(", "),
+}));
 
 const JournalSignIn = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -111,7 +35,8 @@ const JournalSignIn = () => {
   const [displayProgress, setDisplayProgress] = useState(15);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
+  const authenticate = useJournalStore((s) => s.authenticate);
   const redirectFeedback = getRedirectFeedback(redirectStatus);
 
   useEffect(() => {
@@ -135,6 +60,10 @@ const JournalSignIn = () => {
     };
   }, [isLoading, redirectFeedback.progress, redirectStatus]);
 
+  if (isAuthenticated) {
+    return <Navigate to={routes.dashboard} replace />;
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -142,22 +71,23 @@ const JournalSignIn = () => {
     setRedirectStatus("idle");
     setDisplayProgress(getRedirectFeedback("idle").progress);
 
-    // Simulate API call delay
     setTimeout(() => {
-      // Check if credentials match any dummy account
-      const account = DUMMY_ACCOUNTS.find(
-        (acc) => acc.email.toLowerCase().trim() === email.toLowerCase().trim() && acc.password === password
-      );
+      const storeUser = authenticate(email, password);
 
-      if (account) {
-        login(account.name, account.email);
-        
-        // Success - show toast and redirect
+      if (storeUser) {
+        login({
+          id: storeUser.id,
+          name: storeUser.name,
+          email: storeUser.email,
+          roles: storeUser.roles,
+          avatarUrl: storeUser.avatarUrl,
+        });
+
         toast({
           title: "Welcome back!",
-          description: `Successfully signed in as ${account.name}`,
+          description: `Signed in as ${storeUser.name}`,
         });
-        // Redirect to Journal Dashboard after a short delay
+
         setTimeout(() => {
           void runPostSignInRedirect(prefetchRoute, navigate, routes.dashboard, (status) => {
             setRedirectStatus(status);
@@ -172,282 +102,142 @@ const JournalSignIn = () => {
           });
         }, 500);
       } else {
-        // Error - show error message
         setError("Invalid email or password. Please try again.");
         setIsLoading(false);
         toast({
           title: "Sign in failed",
-          description: "Invalid email or password. Please check your credentials.",
+          description: "Invalid email or password.",
           variant: "destructive",
         });
       }
-    }, 800);
+    }, 400);
+  };
+
+  const fillDemo = (demoEmail: string, demoPassword: string) => {
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+    setError("");
   };
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: "'Nunito', sans-serif" }}>
+    <div className="min-h-screen bg-white">
       <JournalHeader />
-      
-      <main className="pt-16 pb-20 h-[100dvh]">
-        <div className="container mx-auto px-6 h-[calc(100dvh-64px)] flex items-center">
-          <div className="max-w-6xl mx-auto w-full">
-            <div className="grid lg:grid-cols-2 gap-12 items-center">
-              {/* Left Side - Branding/Visual */}
-              <div className="hidden lg:flex flex-col justify-center space-y-8">
-                <div className="space-y-6">
-                  <div className="inline-flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-xl bg-gray-900 flex items-center justify-center">
-                      <BookOpen className="h-7 w-7 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">TUES Journal</h2>
-                      <p className="text-sm text-gray-600">Economics Research & Analysis</p>
-                    </div>
-                  </div>
-                  <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
-                    Welcome back to the Journal
-                  </h1>
-                  <p className="text-base text-gray-600 leading-relaxed max-w-md">
-                    Access your account to submit articles, review papers, and manage your publications. Join our community of economists, scholars, and policy thinkers.
-                  </p>
+
+      <main className="pt-16 pb-20 min-h-[100dvh]">
+        <div className="container mx-auto px-6 py-8">
+          <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-12 items-start">
+            <div className="hidden lg:block space-y-6">
+              <div className="inline-flex items-center gap-3">
+                <div className="w-14 h-14 rounded-xl bg-blue-600 flex items-center justify-center">
+                  <BookOpen className="h-7 w-7 text-white" />
                 </div>
-                <div className="space-y-4 pt-8 border-t border-gray-200">
-                  <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Submit & Publish</p>
-                      <p className="text-sm text-gray-600">Share your research with the academic community</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Peer Review</p>
-                      <p className="text-sm text-gray-600">Contribute to the review process</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Track Submissions</p>
-                      <p className="text-sm text-gray-600">Monitor your article status and progress</p>
-                    </div>
-                  </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">SJMS</h2>
+                  <p className="text-sm text-gray-600">Scientific Journal Management System</p>
                 </div>
               </div>
+              <h1 className="text-4xl font-bold text-gray-900 leading-tight">
+                Manage the complete publication workflow
+              </h1>
+              <p className="text-gray-600 leading-relaxed max-w-md">
+                Sign in with a demo account below to explore role-based workflows for authors, editors, reviewers, and administrators.
+              </p>
 
-              {/* Right Side - Sign In Form */}
-              <div className="w-full max-w-sm mx-auto lg:max-w-md">
-                <div className="bg-white border border-gray-200 rounded-xl shadow-2xl p-8">
-                  {/* Mobile Header */}
-                  <div className="lg:hidden text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-gray-900 mb-4">
-                      <BookOpen className="h-6 w-6 text-white" />
+              <div className="pt-6 border-t border-gray-200">
+                <p className="text-sm font-medium text-gray-900 mb-3">Demo accounts</p>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {DEMO_ACCOUNTS.map((acc) => (
+                    <button
+                      key={acc.email}
+                      type="button"
+                      onClick={() => fillDemo(acc.email, acc.password)}
+                      className="w-full text-left p-3 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors"
+                    >
+                      <p className="text-sm font-medium text-gray-900">{acc.name}</p>
+                      <p className="text-xs text-gray-500">{acc.email} · {acc.roles}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="w-full max-w-md mx-auto lg:max-w-lg">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8">
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Sign in</h1>
+                <p className="text-gray-600 text-sm mb-6">Enter credentials or select a demo account</p>
+
+                {error && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="staff@journal.com"
+                        value={email}
+                        onChange={(e) => { setEmail(e.target.value); setError(""); }}
+                        className="pl-10 h-11 rounded-xl"
+                        required
+                      />
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                      Sign in to TUES Journal
-                    </h1>
-                    <p className="text-gray-600 text-sm">
-                      Access your account to continue
-                    </p>
                   </div>
 
-                  {/* Desktop Header */}
-                  <div className="hidden lg:block mb-8">
-                    <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                      Sign in
-                    </h1>
-                    <p className="text-gray-600 text-sm">
-                      Enter your credentials to access your account
-                    </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter password"
+                        value={password}
+                        onChange={(e) => { setPassword(e.target.value); setError(""); }}
+                        className="pl-10 pr-10 h-11 rounded-xl"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Error Message */}
-                  {error && (
-                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-                      <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
-                      <p className="text-sm text-red-700 flex-1">{error}</p>
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isLoading ? redirectFeedback.label : "Sign In"}
+                  </Button>
+
+                  {isLoading && (
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                        style={{ width: `${displayProgress}%` }}
+                      />
                     </div>
                   )}
+                </form>
 
-                  {/* Sign In Form */}
-                  <form onSubmit={handleSubmit} className="space-y-5">
-                    {/* Email Field */}
-                    <div className="space-y-2">
-                      <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                        Email Address
-                      </Label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                        <Input
-                          id="email"
-                          type="email"
-                          placeholder="Enter your email"
-                          value={email}
-                          onChange={(e) => {
-                            setEmail(e.target.value);
-                            setError("");
-                          }}
-                          className={`pl-10 h-11 rounded-lg border-gray-300 focus:border-gray-900 focus:ring-gray-900 ${
-                            error ? "border-red-300 focus:border-red-500 focus:ring-red-200" : ""
-                          }`}
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    {/* Password Field */}
-                    <div className="space-y-2">
-                      <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                        Password
-                      </Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                        <Input
-                          id="password"
-                          type={showPassword ? "text" : "password"}
-                          placeholder="Enter your password"
-                          value={password}
-                          onChange={(e) => {
-                            setPassword(e.target.value);
-                            setError("");
-                          }}
-                          className={`pl-10 pr-10 h-11 rounded-lg border-gray-300 focus:border-gray-900 focus:ring-gray-900 ${
-                            error ? "border-red-300 focus:border-red-500 focus:ring-red-200" : ""
-                          }`}
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                          aria-label={showPassword ? "Hide password" : "Show password"}
-                        >
-                          {showPassword ? (
-                            <EyeOff className="h-5 w-5" />
-                          ) : (
-                            <Eye className="h-5 w-5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Remember Me & Forgot Password */}
-                    <div className="flex items-center justify-between text-sm">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900 cursor-pointer"
-                        />
-                        <span className="text-gray-600">Remember me</span>
-                      </label>
-                      <Link
-                        to="#"
-                        className="text-gray-900 hover:text-gray-700 font-medium transition-colors hover:underline"
-                      >
-                        Forgot password?
-                      </Link>
-                    </div>
-
-                    {/* Submit Button */}
-                    <Button
-                      type="submit"
-                      disabled={isLoading}
-                      className="w-full h-11 rounded-lg bg-gray-900 text-white font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isLoading ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          {redirectFeedback.label}
-                        </span>
-                      ) : (
-                        "Sign In"
-                      )}
-                    </Button>
-                    {isLoading && (
-                      <div className="space-y-2" aria-live="polite">
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                          <div
-                            role="progressbar"
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-valuenow={displayProgress}
-                            className="h-full rounded-full bg-gray-900 transition-all duration-300"
-                            style={{ width: `${displayProgress}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-gray-500 text-center">{redirectFeedback.label}</p>
-                      </div>
-                    )}
-                  </form>
-
-                  {/* Divider */}
-                  <div className="relative my-8">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-200"></div>
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="px-4 bg-white text-gray-500">Or continue with</span>
-                    </div>
-                  </div>
-
-                  {/* Social Sign In */}
-                  <div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full h-11 rounded-lg border-gray-300 hover:bg-gray-50 transition-colors"
-                    >
-                      <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
-                        <path
-                          fill="currentColor"
-                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        />
-                        <path
-                          fill="currentColor"
-                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        />
-                        <path
-                          fill="currentColor"
-                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                        />
-                        <path
-                          fill="currentColor"
-                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                        />
-                      </svg>
-                      Continue with Google
-                    </Button>
-                  </div>
-
-                  {/* Sign Up Link */}
-                  <div className="mt-8 text-center">
-                    <p className="text-gray-600 text-sm">
-                      Don't have an account?{" "}
-                      <Link
-                        to={routes.register}
-                        className="text-gray-900 hover:text-gray-700 font-semibold transition-colors hover:underline"
-                      >
-                        Get started
-                      </Link>
-                    </p>
-                  </div>
-                </div>
+                <p className="mt-6 text-center text-sm text-gray-600">
+                  New author?{" "}
+                  <Link to={routes.register} className="text-blue-600 font-medium hover:underline">
+                    Create an account
+                  </Link>
+                </p>
               </div>
             </div>
           </div>

@@ -1,0 +1,87 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "submissions": "Submissions",
+    "mySubmissions": "My Submissions",
+    "allSubmissions": "All Submissions",
+    "assignedSubmissions": "Assigned Submissions",
+    "payments": "Payments",
+    "reviews": "Reviews",
+    "assignedReviews": "Assigned Reviews",
+    "reviewMonitoring": "Review Monitoring",
+    "editorial": "Editorial",
+    "screening": "Submission Screening",
+    "plagiarism": "Plagiarism",
+    "editorialDecision": "Editorial Decision",
+    "reviewerAssignment": "Reviewer Assignment",
+    "production": "Production",
+    "copyeditingQueue": "Copyediting Queue",
+    "layoutQueue": "Assigned Articles",
+    "productionFiles": "Completed Layouts",
+    "published": "Published Articles",
+    "publication": "Publication",
+    "volumes": "Volume & Issue",
+    "issues": "Issues",
+    "doiManagement": "DOI Management",
+    "users": "Users",
+    "reports": "Reports",
+    "settings": "Settings",
+    "notifications": "Notifications",
+    "profile": "Profile"
+  },
+  "common": {
+    "logout": "Logout",
+    "save": "Save",
+    "dashboard": "Dashboard"
+  },
+  "membership": {
+    "memberPayment": "Member Payment",
+    "standardAccount": "Standard Account",
+    "paymentPending": "Payment Pending"
+  },
+  "settings": {
+    "title": "Settings",
+    "profile": {
+      "title": "Your Profile",
+      "subtitle": "Update your account photo"
+    },
+    "language": {
+      "title": "Language",
+      "subtitle": "Choose your preferred interface language",
+      "label": "Display language"
+    },
+    "journalConfig": {
+      "title": "Journal Configuration",
+      "subtitle": "System settings for {{shortName}}"
+    },
+    "submissionFee": {
+      "title": "Submission Fee",
+      "subtitle": "Bank transfer details shown to authors before they can submit",
+      "requirePayment": "Require payment before submission",
+      "requirePaymentHint": "When disabled, authors can submit without paying",
+      "amount": "Amount",
+      "currency": "Currency",
+      "bankName": "Bank Name",
+      "accountName": "Account Name",
+      "accountNumber": "Account Number",
+      "transferInstructions": "Transfer Instructions",
+      "save": "Save Payment Settings",
+      "saved": "Payment settings saved.",
+      "validationError": "Please fill in all required payment fields.",
+      "updated": "Updated {{date}}"
+    },
+    "guidelines": {
+      "title": "Submission Guidelines"
+    },
+    "journalFields": {
+      "journalName": "Journal Name",
+      "shortName": "Short Name",
+      "publisher": "Publisher",
+      "issn": "ISSN",
+      "contactEmail": "Contact Email",
+      "reviewPolicy": "Review Policy",
+      "defaultLanguage": "Default Language",
+      "lastUpdated": "Last Updated"
+    }
+  }
+}

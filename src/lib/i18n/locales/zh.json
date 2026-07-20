@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "dashboard": "仪表板",
+    "submissions": "投稿",
+    "payments": "付款",
+    "reviews": "审稿",
+    "editorial": "编辑",
+    "production": "制作",
+    "published": "已发表文章",
+    "volumes": "卷期",
+    "users": "用户",
+    "reports": "报告",
+    "settings": "设置"
+  },
+  "common": {
+    "logout": "退出登录",
+    "save": "保存",
+    "dashboard": "仪表板"
+  },
+  "membership": {
+    "memberPayment": "付费会员",
+    "standardAccount": "标准账户",
+    "paymentPending": "付款待审核"
+  },
+  "settings": {
+    "title": "设置",
+    "profile": {
+      "title": "您的个人资料",
+      "subtitle": "更新您的账户照片"
+    },
+    "language": {
+      "title": "语言",
+      "subtitle": "选择您偏好的界面语言",
+      "label": "显示语言"
+    },
+    "journalConfig": {
+      "title": "期刊配置",
+      "subtitle": "{{shortName}} 系统设置"
+    },
+    "submissionFee": {
+      "title": "投稿费用",
+      "subtitle": "作者投稿前显示的银行转账信息",
+      "requirePayment": "投稿前要求付款",
+      "requirePaymentHint": "关闭后作者无需付款即可投稿",
+      "amount": "金额",
+      "currency": "货币",
+      "bankName": "银行名称",
+      "accountName": "账户名称",
+      "accountNumber": "账号",
+      "transferInstructions": "转账说明",
+      "save": "保存付款设置",
+      "saved": "付款设置已保存。",
+      "validationError": "请填写所有必填的付款字段。",
+      "updated": "更新于 {{date}}"
+    },
+    "guidelines": {
+      "title": "投稿指南"
+    },
+    "journalFields": {
+      "journalName": "期刊名称",
+      "shortName": "简称",
+      "publisher": "出版方",
+      "issn": "ISSN",
+      "contactEmail": "联系邮箱",
+      "reviewPolicy": "审稿政策",
+      "defaultLanguage": "默认语言",
+      "lastUpdated": "最后更新"
+    }
+  }
+}

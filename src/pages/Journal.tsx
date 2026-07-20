@@ -1,10 +1,26 @@
 import JournalHeader from "@/components/JournalHeader";
 import Footer from "@/components/Footer";
-import { Clock, Bookmark, Share2, MoreHorizontal, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState, useRef } from "react";
+import { PublishedArticlesSection } from "@/components/landing/PublishedArticlesSection";
+import {
+  Clock,
+  Bookmark,
+  Share2,
+  MoreHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+} from "lucide-react";
+import { Link } from "react-router-dom";
+import { useState, useRef, useMemo } from "react";
+import { routes } from "@/app/routes";
+import { filterLandingArticles, LANDING_ARTICLES } from "@/lib/landing/articles";
+import { Input } from "@/components/ui/input";
+import { useJournalStore } from "@/lib/store/store";
+import { filterPublicPublishedArticles } from "@/lib/store/publicArticles";
 
 const Journal = () => {
   const [selectedTopic, setSelectedTopic] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const topics = [
@@ -33,206 +49,34 @@ const Journal = () => {
     }
   };
 
-  const articles = [
-    {
-      id: 1,
-      title: "Inflation, Expectations, and Everyday Markets in Central Asia",
-      excerpt: "TUES economists examine how price expectations are formed in local bazaars, digital marketplaces, and cross‑border trade corridors—and what this means for monetary policy across the region.",
-      author: "Dr. Dilshod Karimov",
-      authorRole: "Professor of Applied Macroeconomics",
-      authorAvatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1542744173-05336fcc7ad4?auto=format&fit=crop&w=1000&q=80",
-      category: "Macroeconomics",
-      readTime: 14,
-      date: "Mar 15",
-      featured: true,
-    },
-    {
-      id: 2,
-      title: "Pricing power in small markets: lessons from Termez bazaars",
-      excerpt: "A field report on how micro‑entrepreneurs adjust prices daily in response to currency shifts and seasonal demand.",
-      author: "N. Yuldasheva",
-      authorRole: "Student Research",
-      authorAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1542228262-3d6636a87b29?auto=format&fit=crop&w=800&q=80",
-      category: "Microeconomics",
-      readTime: 6,
-      date: "Mar 12",
-      featured: false,
-    },
-    {
-      id: 3,
-      title: "Service‑sector reforms and the future of Uzbek cities",
-      excerpt: "How coordinated reforms in education, tourism, and public services are reshaping the economic geography of Uzbekistan.",
-      author: "Policy Lab at TUES",
-      authorRole: "Research Team",
-      authorAvatar: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=900&q=80",
-      category: "Policy & Reform",
-      readTime: 10,
-      date: "Mar 10",
-      featured: false,
-    },
-    {
-      id: 4,
-      title: "Visualizing trade flows along the Termez logistics corridor",
-      excerpt: "A visual guide to goods, services, and data moving through one of Central Asia's most dynamic gateways.",
-      author: "Applied Statistics Group",
-      authorRole: "Data Visualization Team",
-      authorAvatar: "https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=900&q=80",
-      category: "Data Notebook",
-      readTime: 8,
-      date: "Mar 8",
-      featured: false,
-    },
-    {
-      id: 5,
-      title: "Experiments in behavioral finance with TUES undergraduates",
-      excerpt: "Students document portfolio‑choice experiments, framing effects, and loss aversion in a controlled lab environment.",
-      author: "Student Economics Society",
-      authorRole: "Student Research",
-      authorAvatar: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=900&q=80",
-      category: "Workshop Notes",
-      readTime: 5,
-      date: "Mar 5",
-      featured: false,
-    },
-    {
-      id: 6,
-      title: "Mapping student entrepreneurship across Termez",
-      excerpt: "A data‑driven look at start‑ups, side‑hustles, and service micro‑businesses run by TUES students.",
-      author: "Innovation & Start‑up Lab",
-      authorRole: "Research Team",
-      authorAvatar: "https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=900&q=80",
-      category: "Campus Data",
-      readTime: 7,
-      date: "Mar 3",
-      featured: false,
-    },
-    {
-      id: 7,
-      title: "Digital transformation in Central Asian banking systems",
-      excerpt: "An analysis of how fintech innovations are reshaping traditional banking models across Uzbekistan and neighboring countries.",
-      author: "Dr. Alisher Toshmatov",
-      authorRole: "Professor of Financial Economics",
-      authorAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=900&q=80",
-      category: "Financial Markets",
-      readTime: 12,
-      date: "Mar 1",
-      featured: false,
-    },
-    {
-      id: 8,
-      title: "Agricultural policy reforms and rural economic development",
-      excerpt: "Examining the impact of recent policy changes on agricultural productivity and rural livelihoods in Uzbekistan.",
-      author: "Rural Economics Research Group",
-      authorRole: "Research Team",
-      authorAvatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1464226184884-fa280b87c399?auto=format&fit=crop&w=900&q=80",
-      category: "Development Economics",
-      readTime: 15,
-      date: "Feb 28",
-      featured: false,
-    },
-    {
-      id: 9,
-      title: "Behavioral nudges in public transport pricing",
-      excerpt: "A field experiment exploring how small changes in pricing structures can influence commuter behavior and system efficiency.",
-      author: "Dr. Malika Karimova",
-      authorRole: "Behavioral Economics Lab",
-      authorAvatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=900&q=80",
-      category: "Behavioral Economics",
-      readTime: 7,
-      date: "Feb 25",
-      featured: false,
-    },
-    {
-      id: 10,
-      title: "Student trading labs and digital asset simulations",
-      excerpt: "How TUES students use virtual trading platforms to understand market dynamics and develop financial literacy skills.",
-      author: "Student Economics Society",
-      authorRole: "Student Research",
-      authorAvatar: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=900&q=80",
-      category: "Financial Markets",
-      readTime: 9,
-      date: "Feb 22",
-      featured: false,
-    },
-    {
-      id: 11,
-      title: "Tourism, services, and post‑pandemic recovery",
-      excerpt: "Analyzing the resilience and transformation of Uzbekistan's tourism sector in the wake of global travel disruptions.",
-      author: "Tourism Economics Research Center",
-      authorRole: "Research Team",
-      authorAvatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=900&q=80",
-      category: "International Trade",
-      readTime: 11,
-      date: "Feb 20",
-      featured: false,
-    },
-    {
-      id: 12,
-      title: "Gender gaps in labor market participation: evidence from Central Asia",
-      excerpt: "A comprehensive study examining barriers and opportunities for women's economic participation across the region.",
-      author: "Dr. Feruza Nasirova",
-      authorRole: "Labor Economics Department",
-      authorAvatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=900&q=80",
-      category: "Public Policy",
-      readTime: 13,
-      date: "Feb 18",
-      featured: false,
-    },
-    {
-      id: 13,
-      title: "Climate change adaptation strategies for Central Asian economies",
-      excerpt: "Exploring economic policies and market mechanisms to address climate risks in water-scarce regions.",
-      author: "Environmental Economics Group",
-      authorRole: "Research Team",
-      authorAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=900&q=80",
-      category: "Development Economics",
-      readTime: 16,
-      date: "Feb 15",
-      featured: false,
-    },
-    {
-      id: 14,
-      title: "E-commerce growth and traditional retail transformation",
-      excerpt: "How digital marketplaces are reshaping consumer behavior and business models in Uzbekistan's retail sector.",
-      author: "Digital Economy Research Lab",
-      authorRole: "Research Team",
-      authorAvatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=900&q=80",
-      category: "Microeconomics",
-      readTime: 10,
-      date: "Feb 12",
-      featured: false,
-    },
-    {
-      id: 15,
-      title: "Monetary policy transmission mechanisms in emerging markets",
-      excerpt: "Investigating how central bank policies affect real economic outcomes in small open economies.",
-      author: "Dr. Shavkat Mirziyoyev",
-      authorRole: "Monetary Policy Research",
-      authorAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=900&q=80",
-      category: "Macroeconomics",
-      readTime: 14,
-      date: "Feb 10",
-      featured: false,
-    },
-  ];
+  const submissions = useJournalStore((state) => state.submissions);
+  const volumes = useJournalStore((state) => state.volumes);
+  const journalSettings = useJournalStore((state) => state.journalSettings);
+  const getUserById = useJournalStore((state) => state.getUserById);
 
-  const featuredArticle = articles.find((a) => a.featured);
-  const regularArticles = articles.filter((a) => !a.featured);
+  const filteredArticles = useMemo(
+    () => filterLandingArticles(LANDING_ARTICLES, searchQuery, selectedTopic),
+    [searchQuery, selectedTopic],
+  );
+
+  const filteredPublishedArticles = useMemo(
+    () =>
+      filterPublicPublishedArticles(
+        submissions,
+        getUserById,
+        volumes,
+        journalSettings,
+        searchQuery,
+        selectedTopic,
+      ),
+    [submissions, getUserById, volumes, journalSettings, searchQuery, selectedTopic],
+  );
+
+  const featuredArticle = filteredArticles.find((a) => a.featured);
+  const regularArticles = filteredArticles.filter((a) => !a.featured);
+  const discoverMoreArticles = filteredArticles.filter((a) => [9, 10, 11].includes(a.id));
+  const hasActiveSearch = searchQuery.trim().length > 0;
+  const totalSearchResults = filteredArticles.length + filteredPublishedArticles.length;
 
   return (
     <div className="min-h-screen bg-white">
@@ -249,6 +93,33 @@ const Journal = () => {
               <p className="text-base text-gray-600 max-w-2xl mx-auto leading-relaxed">
                 Research, commentary, and analysis from economists, scholars, and policy thinkers
               </p>
+
+              <div className="mt-8 max-w-xl mx-auto">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search articles, authors, and author submissions..."
+                    aria-label="Search journal articles"
+                    className="h-12 rounded-full border-gray-300 bg-white pl-12 pr-4 text-base shadow-sm focus-visible:ring-gray-400"
+                  />
+                </div>
+                {hasActiveSearch && (
+                  <p className="mt-3 text-sm text-gray-500">
+                    {totalSearchResults === 0
+                      ? "No articles or author submissions match your search."
+                      : `${totalSearchResults} result${totalSearchResults === 1 ? "" : "s"} found${
+                          filteredPublishedArticles.length > 0
+                            ? ` (${filteredPublishedArticles.length} published submission${
+                                filteredPublishedArticles.length === 1 ? "" : "s"
+                              })`
+                            : ""
+                        }`}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </section>
@@ -326,7 +197,11 @@ const Journal = () => {
           <section className="border-b border-gray-200 bg-white">
             <div className="max-w-7xl mx-auto px-6 py-12">
               <div className="max-w-4xl mx-auto">
-                <article className="cursor-pointer group">
+                <Link
+                  to={routes.article(featuredArticle.id)}
+                  className="block cursor-pointer group"
+                >
+                  <article>
                   <div className="mb-6">
                     <img
                       src={featuredArticle.image}
@@ -381,7 +256,8 @@ const Journal = () => {
                       </div>
                     </div>
                   </div>
-                </article>
+                  </article>
+                </Link>
               </div>
             </div>
           </section>
@@ -393,11 +269,22 @@ const Journal = () => {
             <div className="grid lg:grid-cols-3 gap-8">
               {/* Main Articles Column */}
               <div className="lg:col-span-2 space-y-8">
+                {regularArticles.length === 0 && filteredPublishedArticles.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-center">
+                    <Search className="mx-auto mb-3 h-8 w-8 text-gray-400" />
+                    <p className="text-lg font-medium text-gray-900">No articles found</p>
+                    <p className="mt-2 text-gray-600">
+                      Try a different search term, author name, or clear the topic filter.
+                    </p>
+                  </div>
+                )}
                 {regularArticles.map((article) => (
-                  <article
+                  <Link
                     key={article.id}
-                    className="cursor-pointer group border-b border-gray-200 pb-8 last:border-0"
+                    to={routes.article(article.id)}
+                    className="block cursor-pointer group border-b border-gray-200 pb-8 last:border-0"
                   >
+                    <article>
                     <div className="flex gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-3">
@@ -439,7 +326,8 @@ const Journal = () => {
                         />
                       </div>
                     </div>
-                  </article>
+                    </article>
+                  </Link>
                 ))}
               </div>
 
@@ -452,30 +340,20 @@ const Journal = () => {
                       Discover more
                     </h3>
                     <div className="space-y-4">
-                      <div className="flex items-start gap-3 cursor-pointer group">
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-gray-900 group-hover:text-gray-700 transition-colors line-clamp-2">
-                            Behavioral nudges in public transport pricing
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">7 min read</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 cursor-pointer group">
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-gray-900 group-hover:text-gray-700 transition-colors line-clamp-2">
-                            Student trading labs and digital asset simulations
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">9 min read</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 cursor-pointer group">
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-gray-900 group-hover:text-gray-700 transition-colors line-clamp-2">
-                            Tourism, services, and post‑pandemic recovery
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">11 min read</p>
-                        </div>
-                      </div>
+                      {discoverMoreArticles.map((article) => (
+                        <Link
+                          key={article.id}
+                          to={routes.article(article.id)}
+                          className="flex items-start gap-3 cursor-pointer group"
+                        >
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-gray-900 group-hover:text-gray-700 transition-colors line-clamp-2">
+                              {article.title}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">{article.readTime} min read</p>
+                          </div>
+                        </Link>
+                      ))}
                     </div>
                   </div>
 
@@ -491,9 +369,12 @@ const Journal = () => {
                       TUES Economics Journal invites submissions on topics including digital platforms, gig work,
                       tourism, and education services.
                     </p>
-                    <button className="w-full px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors">
+                    <Link
+                      to={routes.register}
+                      className="block w-full px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors text-center"
+                    >
                       Submit your manuscript
-                    </button>
+                    </Link>
                   </div>
 
                   {/* Author Spotlight */}
@@ -522,216 +403,7 @@ const Journal = () => {
           </div>
         </section>
 
-        {/* Latest Research - Magazine Style Layout */}
-        <section className="bg-white border-t border-gray-200">
-          <div className="max-w-7xl mx-auto px-6 py-16">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Latest Research</h2>
-              <p className="text-gray-600">Recent publications and working papers from our research teams</p>
-            </div>
-
-            <div className="grid md:grid-cols-12 gap-6">
-              {/* Large Featured Card - Left Side */}
-              <article className="md:col-span-8 bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl overflow-hidden text-white cursor-pointer group hover:shadow-2xl transition-all duration-300">
-                <div className="relative h-96">
-                  <img
-                    src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80"
-                    alt="Research"
-                    className="w-full h-full object-cover opacity-60 group-hover:opacity-70 transition-opacity"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-8">
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white text-xs font-medium rounded-full">
-                        Macroeconomics
-                      </span>
-                      <span className="text-white/70 text-sm">March 2025</span>
-                    </div>
-                    <h3 className="text-3xl font-bold mb-3 group-hover:text-blue-300 transition-colors">
-                      Central Bank Digital Currencies: Opportunities for Central Asia
-                    </h3>
-                    <p className="text-white/90 text-lg leading-relaxed mb-4">
-                      A comprehensive analysis of CBDC implementation strategies and their potential impact on monetary policy and financial inclusion across the region.
-                    </p>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80"
-                          alt="Author"
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                        <span className="text-sm text-white/90">Dr. Shavkat Mirziyoyev</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-white/70 text-sm">
-                        <Clock className="w-4 h-4" />
-                        <span>18 min read</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </article>
-
-              {/* Right Side - Stacked Cards */}
-              <div className="md:col-span-4 space-y-6">
-                {/* Card 1 */}
-                <article className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow cursor-pointer group">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0">
-                      <img
-                        src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=200&q=80"
-                        alt="Article"
-                        className="w-20 h-20 rounded-lg object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs text-blue-600 font-medium">E-commerce</span>
-                      <h4 className="text-base font-bold text-gray-900 mt-1 mb-2 line-clamp-2 group-hover:text-blue-600 transition-colors">
-                        Digital Payment Adoption in Rural Markets
-                      </h4>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Clock className="w-3 h-3" />
-                        <span>8 min</span>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-
-                {/* Card 2 */}
-                <article className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow cursor-pointer group">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0">
-                      <img
-                        src="https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=200&q=80"
-                        alt="Article"
-                        className="w-20 h-20 rounded-lg object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs text-green-600 font-medium">Environment</span>
-                      <h4 className="text-base font-bold text-gray-900 mt-1 mb-2 line-clamp-2 group-hover:text-green-600 transition-colors">
-                        Green Finance Mechanisms for Climate Adaptation
-                      </h4>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Clock className="w-3 h-3" />
-                        <span>12 min</span>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-
-                {/* Card 3 */}
-                <article className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow cursor-pointer group">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0">
-                      <img
-                        src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=200&q=80"
-                        alt="Article"
-                        className="w-20 h-20 rounded-lg object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs text-purple-600 font-medium">Policy</span>
-                      <h4 className="text-base font-bold text-gray-900 mt-1 mb-2 line-clamp-2 group-hover:text-purple-600 transition-colors">
-                        Labor Market Reforms and Gender Equality
-                      </h4>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Clock className="w-3 h-3" />
-                        <span>15 min</span>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              </div>
-            </div>
-
-            {/* Bottom Row - Horizontal Cards */}
-            <div className="grid md:grid-cols-3 gap-6 mt-6">
-              <article className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group">
-                <div className="h-48 overflow-hidden">
-                  <img
-                    src="https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=600&q=80"
-                    alt="Article"
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                  />
-                </div>
-                <div className="p-5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded">
-                      Trade
-                    </span>
-                    <span className="text-xs text-gray-500">Feb 28</span>
-                  </div>
-                  <h4 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-orange-600 transition-colors line-clamp-2">
-                    Cross-Border E-Commerce and Regional Integration
-                  </h4>
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                    Analyzing how digital trade platforms are connecting Central Asian markets.
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <Clock className="w-3 h-3" />
-                    <span>10 min read</span>
-                  </div>
-                </div>
-              </article>
-
-              <article className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group">
-                <div className="h-48 overflow-hidden">
-                  <img
-                    src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=600&q=80"
-                    alt="Article"
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                  />
-                </div>
-                <div className="p-5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
-                      Finance
-                    </span>
-                    <span className="text-xs text-gray-500">Feb 25</span>
-                  </div>
-                  <h4 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
-                    Microfinance and Small Business Growth
-                  </h4>
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                    Case studies from Uzbekistan's microfinance sector and entrepreneurial development.
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <Clock className="w-3 h-3" />
-                    <span>9 min read</span>
-                  </div>
-                </div>
-              </article>
-
-              <article className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group">
-                <div className="h-48 overflow-hidden">
-                  <img
-                    src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80"
-                    alt="Article"
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                  />
-                </div>
-                <div className="p-5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs font-medium rounded">
-                      Data
-                    </span>
-                    <span className="text-xs text-gray-500">Feb 22</span>
-                  </div>
-                  <h4 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors line-clamp-2">
-                    Big Data Analytics in Economic Forecasting
-                  </h4>
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                    Leveraging machine learning and big data for improved economic predictions.
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <Clock className="w-3 h-3" />
-                    <span>11 min read</span>
-                  </div>
-                </div>
-              </article>
-            </div>
-          </div>
-        </section>
+        <PublishedArticlesSection searchQuery={searchQuery} selectedTopic={selectedTopic} />
       </main>
 
       <Footer />

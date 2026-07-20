@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "dashboard": "Панель управления",
+    "submissions": "Рукописи",
+    "payments": "Платежи",
+    "reviews": "Рецензии",
+    "editorial": "Редакция",
+    "production": "Производство",
+    "published": "Опубликованные статьи",
+    "volumes": "Том и выпуск",
+    "users": "Пользователи",
+    "reports": "Отчёты",
+    "settings": "Настройки"
+  },
+  "common": {
+    "logout": "Выйти",
+    "save": "Сохранить",
+    "dashboard": "Панель управления"
+  },
+  "membership": {
+    "memberPayment": "Оплаченный участник",
+    "standardAccount": "Стандартный аккаунт",
+    "paymentPending": "Ожидание оплаты"
+  },
+  "settings": {
+    "title": "Настройки",
+    "profile": {
+      "title": "Ваш профиль",
+      "subtitle": "Обновите фото профиля"
+    },
+    "language": {
+      "title": "Язык",
+      "subtitle": "Выберите язык интерфейса",
+      "label": "Язык отображения"
+    },
+    "journalConfig": {
+      "title": "Настройки журнала",
+      "subtitle": "Системные настройки {{shortName}}"
+    },
+    "submissionFee": {
+      "title": "Плата за подачу",
+      "subtitle": "Банковские реквизиты для авторов перед подачей рукописи",
+      "requirePayment": "Требовать оплату перед подачей",
+      "requirePaymentHint": "Если отключено, авторы могут подавать без оплаты",
+      "amount": "Сумма",
+      "currency": "Валюта",
+      "bankName": "Название банка",
+      "accountName": "Имя счёта",
+      "accountNumber": "Номер счёта",
+      "transferInstructions": "Инструкции по переводу",
+      "save": "Сохранить настройки оплаты",
+      "saved": "Настройки оплаты сохранены.",
+      "validationError": "Заполните все обязательные поля оплаты.",
+      "updated": "Обновлено {{date}}"
+    },
+    "guidelines": {
+      "title": "Правила подачи"
+    },
+    "journalFields": {
+      "journalName": "Название журнала",
+      "shortName": "Краткое название",
+      "publisher": "Издатель",
+      "issn": "ISSN",
+      "contactEmail": "Контактный email",
+      "reviewPolicy": "Политика рецензирования",
+      "defaultLanguage": "Язык по умолчанию",
+      "lastUpdated": "Последнее обновление"
+    }
+  }
+}

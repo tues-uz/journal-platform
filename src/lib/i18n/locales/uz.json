@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "dashboard": "Boshqaruv paneli",
+    "submissions": "Topshiriqlar",
+    "payments": "To'lovlar",
+    "reviews": "Taqrizlar",
+    "editorial": "Tahririyat",
+    "production": "Nashr",
+    "published": "Nashr etilgan maqolalar",
+    "volumes": "Jild va son",
+    "users": "Foydalanuvchilar",
+    "reports": "Hisobotlar",
+    "settings": "Sozlamalar"
+  },
+  "common": {
+    "logout": "Chiqish",
+    "save": "Saqlash",
+    "dashboard": "Boshqaruv paneli"
+  },
+  "membership": {
+    "memberPayment": "To'lovli a'zo",
+    "standardAccount": "Standart hisob",
+    "paymentPending": "To'lov kutilmoqda"
+  },
+  "settings": {
+    "title": "Sozlamalar",
+    "profile": {
+      "title": "Profilingiz",
+      "subtitle": "Hisob rasmingizni yangilang"
+    },
+    "language": {
+      "title": "Til",
+      "subtitle": "Interfeys tilini tanlang",
+      "label": "Ko'rsatish tili"
+    },
+    "journalConfig": {
+      "title": "Jurnal sozlamalari",
+      "subtitle": "{{shortName}} tizim sozlamalari"
+    },
+    "submissionFee": {
+      "title": "Topshiriq to'lovi",
+      "subtitle": "Mualliflar topshiriq yuborishdan oldin ko'radigan bank rekvizitlari",
+      "requirePayment": "Topshiriqdan oldin to'lov talab qilish",
+      "requirePaymentHint": "O'chirilganda mualliflar to'lovsiz topshiriq yuborishi mumkin",
+      "amount": "Summa",
+      "currency": "Valyuta",
+      "bankName": "Bank nomi",
+      "accountName": "Hisob egasi",
+      "accountNumber": "Hisob raqami",
+      "transferInstructions": "O'tkazma ko'rsatmalari",
+      "save": "To'lov sozlamalarini saqlash",
+      "saved": "To'lov sozlamalari saqlandi.",
+      "validationError": "Barcha majburiy to'lov maydonlarini to'ldiring.",
+      "updated": "Yangilangan {{date}}"
+    },
+    "guidelines": {
+      "title": "Topshiriq qoidalari"
+    },
+    "journalFields": {
+      "journalName": "Jurnal nomi",
+      "shortName": "Qisqa nom",
+      "publisher": "Nashriyot",
+      "issn": "ISSN",
+      "contactEmail": "Aloqa emaili",
+      "reviewPolicy": "Taqriz siyosati",
+      "defaultLanguage": "Standart til",
+      "lastUpdated": "Oxirgi yangilanish"
+    }
+  }
+}
