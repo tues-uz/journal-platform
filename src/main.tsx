@@ -6,6 +6,7 @@ import { AppProviders } from "@/app/providers";
 import { AuthProvider } from "@/features/auth/context";
 import { SidebarProvider } from "@/features/layout/sidebar-provider";
 import "./index.css";
+import "@/lib/i18n";
 
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("Root element #root not found");

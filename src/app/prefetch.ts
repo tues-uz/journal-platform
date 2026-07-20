@@ -49,6 +49,7 @@ export async function prefetchRoutesOnIdle(
 
 const routeLoaders: Record<string, Loader> = {
   [routes.signin]: () => import("@/pages/JournalSignIn"),
+  [routes.register]: () => import("@/pages/JournalRegister"),
   [routes.dashboard]: () => import("@/pages/JournalDashboard"),
   [routes.editor]: () => import("@/pages/JournalEditor"),
 };

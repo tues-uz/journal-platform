@@ -1,46 +1,29 @@
-export type JournalRole = "journal_maker" | "journal_kurator";
+import type { Role } from "@/lib/rbac/types";
 
 export interface AuthUser {
+  id: string;
   name: string;
   email: string;
-  role: JournalRole;
+  roles: Role[];
+  avatarUrl?: string;
 }
 
-const NAME_KEY = "userName";
-const EMAIL_KEY = "userEmail";
-
-export function deriveRole(email: string): JournalRole {
-  const normalized = email.toLowerCase();
-  if (
-    normalized.includes("kurator") ||
-    normalized.includes("editor") ||
-    normalized.includes("reviewer")
-  ) {
-    return "journal_kurator";
-  }
-
-  return "journal_maker";
-}
+const SESSION_KEY = "journal-auth-session";
 
 export const authStorage = {
-  save(name: string, email: string) {
-    localStorage.setItem(NAME_KEY, name);
-    localStorage.setItem(EMAIL_KEY, email);
+  save(user: AuthUser) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
   },
   clear() {
-    localStorage.removeItem(NAME_KEY);
-    localStorage.removeItem(EMAIL_KEY);
+    localStorage.removeItem(SESSION_KEY);
   },
   read(): AuthUser | null {
-    const name = localStorage.getItem(NAME_KEY);
-    const email = localStorage.getItem(EMAIL_KEY);
-
-    if (!name || !email) return null;
-
-    return {
-      name,
-      email,
-      role: deriveRole(email),
-    };
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as AuthUser;
+    } catch {
+      return null;
+    }
   },
 };

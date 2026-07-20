@@ -26,7 +26,12 @@ const JournalDashboard = () => {
   const { user } = useAuth();
   const { isCollapsed: isSidebarCollapsed } = useSidebarLayout();
   const userName = user?.name ?? "User";
-  const userRole: UserRole = user?.role ?? "journal_maker";
+  const userRole: UserRole = user?.roles.includes("publisher_admin") ||
+    user?.roles.some((r) =>
+      ["editor_in_chief", "editorial_staff", "handling_editor", "reviewer"].includes(r),
+    )
+    ? "journal_kurator"
+    : "journal_maker";
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
