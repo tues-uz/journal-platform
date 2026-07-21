@@ -199,7 +199,9 @@ export interface JournalSettings {
 
 export interface Notification {
   id: string;
-  userId: string;
+  // Optional: the real API scopes /api/notifications to the caller already,
+  // so this is only populated by the mock store.
+  userId?: string;
   title: string;
   message: string;
   read: boolean;

@@ -19,8 +19,8 @@ import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import { useAuthorSubmissionAccess } from "@/lib/payment/useAuthorSubmissionAccess";
 import { submissionsApi } from "@/lib/api/submissions";
+import { notificationsApi } from "@/lib/api/notifications";
 import { buildUserDirectory } from "@/lib/api/userDirectory";
-import { useJournalStore } from "@/lib/store/store";
 import { routes } from "@/app/routes";
 import { canAccessNavPath } from "@/lib/rbac/navItems";
 import { getLayoutStats, filterSubmissionsForProduction } from "@/lib/store/submissionFilters";
@@ -72,8 +72,11 @@ const DashboardPage = () => {
     enabled: !!user,
   });
 
-  // Real GET /api/notifications exists but isn't wired yet — separate follow-up.
-  const notifications = useJournalStore((s) => s.notifications);
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => notificationsApi.list(),
+    enabled: !!user,
+  });
   const getUserById = useMemo(() => buildUserDirectory(submissions), [submissions]);
 
   const relevantSubmissions = useMemo(() => {
@@ -82,8 +85,8 @@ const DashboardPage = () => {
   }, [submissions, user]);
 
   const unreadNotifications = useMemo(
-    () => notifications.filter((n) => n.userId === user?.id && !n.read),
-    [notifications, user?.id],
+    () => notifications.filter((n) => !n.read),
+    [notifications],
   );
 
   const pendingReviews = relevantSubmissions.filter((s) => s.status === "under_review").length;
