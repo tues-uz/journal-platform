@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   FileText,
@@ -17,6 +18,8 @@ import { SubmissionPositionChip } from "@/components/shared/SubmissionPositionCh
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import { useAuthorSubmissionAccess } from "@/lib/payment/useAuthorSubmissionAccess";
+import { submissionsApi } from "@/lib/api/submissions";
+import { buildUserDirectory } from "@/lib/api/userDirectory";
 import { useJournalStore } from "@/lib/store/store";
 import { routes } from "@/app/routes";
 import { canAccessNavPath } from "@/lib/rbac/navItems";
@@ -62,9 +65,16 @@ const DashboardPage = () => {
   const { user } = useAuth();
   const { can, roles } = usePermissions();
   const { canCreateSubmission, needsPayment } = useAuthorSubmissionAccess();
-  const submissions = useJournalStore((s) => s.submissions);
+
+  const { data: submissions = [] } = useQuery({
+    queryKey: ["submissions"],
+    queryFn: () => submissionsApi.list(),
+    enabled: !!user,
+  });
+
+  // Real GET /api/notifications exists but isn't wired yet — separate follow-up.
   const notifications = useJournalStore((s) => s.notifications);
-  const getUserById = useJournalStore((s) => s.getUserById);
+  const getUserById = useMemo(() => buildUserDirectory(submissions), [submissions]);
 
   const relevantSubmissions = useMemo(() => {
     if (!user) return [];

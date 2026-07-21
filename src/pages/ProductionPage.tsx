@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Factory } from "lucide-react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,8 @@ import { LayoutAssignedArticlesTable } from "@/components/layout-editor/LayoutAs
 import { LayoutStatusBadge } from "@/components/shared/LayoutStatusBadge";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
+import { submissionsApi } from "@/lib/api/submissions";
+import { buildUserDirectory } from "@/lib/api/userDirectory";
 import { useJournalStore } from "@/lib/store/store";
 import { filterSubmissionsForProduction } from "@/lib/store/submissionFilters";
 import { getStatusLabel } from "@/lib/status/config";
@@ -16,12 +19,18 @@ import { routes } from "@/app/routes";
 export default function ProductionPage() {
   const { user } = useAuth();
   const { can } = usePermissions();
-  const submissions = useJournalStore((s) => s.submissions);
+
+  const { data: submissions = [] } = useQuery({
+    queryKey: ["submissions"],
+    queryFn: () => submissionsApi.list(),
+    enabled: !!user,
+  });
+
+  // Volumes/issues aren't wired to the real publication API yet, so this
+  // display-only lookup still reads the mock store.
   const volumes = useJournalStore((s) => s.volumes);
   const journalSettings = useJournalStore((s) => s.journalSettings);
-  const getUserById = useJournalStore((s) => s.getUserById);
-  const assignLayoutEditor = useJournalStore((s) => s.assignLayoutEditor);
-  const users = useJournalStore((s) => s.users);
+  const getUserById = useMemo(() => buildUserDirectory(submissions), [submissions]);
 
   const isLayoutEditor =
     can("layout_production", "view") && !can("copyediting", "view");
@@ -41,10 +50,6 @@ export default function ProductionPage() {
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
   }, [submissions, user]);
-
-  const layoutEditors = users.filter(
-    (u) => u.status === "active" && u.roles.includes("layout_editor"),
-  );
 
   const copyeditingCount = pipeline.filter((s) => s.status === "copyediting").length;
   const productionCount = pipeline.filter((s) => s.status === "production").length;
@@ -112,26 +117,10 @@ export default function ProductionPage() {
               ? [
                   {
                     header: "Layout Editor",
-                    cell: (sub: (typeof pipeline)[0]) => {
-                      if (sub.status !== "production") return "—";
-                      return (
-                        <select
-                          className="rounded-lg border border-gray-200 px-2 py-1 text-sm"
-                          value={sub.layoutEditorId ?? ""}
-                          onChange={(e) => {
-                            if (!user || !e.target.value) return;
-                            assignLayoutEditor(sub.id, e.target.value, user.id, user.name);
-                          }}
-                        >
-                          <option value="">Unassigned</option>
-                          {layoutEditors.map((editor) => (
-                            <option key={editor.id} value={editor.id}>
-                              {editor.name}
-                            </option>
-                          ))}
-                        </select>
-                      );
-                    },
+                    cell: (sub: (typeof pipeline)[0]) =>
+                      sub.status !== "production"
+                        ? "—"
+                        : (sub.layoutEditorName ?? "Unclaimed"),
                   },
                 ]
               : []),
