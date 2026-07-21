@@ -127,7 +127,9 @@ export interface Submission {
   authorName?: string;
   authors: SubmissionAuthor[];
   handlingEditorId?: string;
+  handlingEditorName?: string;
   reviewerId?: string;
+  reviewerName?: string;
   pendingReviewerId?: string;
   reviewerInvitationStatus?: ReviewerInvitationStatus;
   proofReady?: boolean;
@@ -139,9 +141,11 @@ export interface Submission {
   editorRecommendationNotes?: string;
   editorRecommendationAt?: string;
   copyeditorId?: string;
+  copyeditorName?: string;
   copyeditedAt?: string;
   copyeditNotes?: string;
   layoutEditorId?: string;
+  layoutEditorName?: string;
   layoutAssignedAt?: string;
   layoutStartedAt?: string;
   layoutDueDate?: string;

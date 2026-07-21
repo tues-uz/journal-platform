@@ -34,7 +34,9 @@ export interface SubmissionDto {
   authorName: string;
   authors: SubmissionAuthor[];
   handlingEditorId: number | null;
+  handlingEditorName: string | null;
   reviewerId: number | null;
+  reviewerName: string | null;
   pendingReviewerId: number | null;
   reviewerInvitationStatus: string | null;
   proofReady: boolean;
@@ -46,9 +48,11 @@ export interface SubmissionDto {
   editorRecommendationNotes: string | null;
   editorRecommendationAt: string | null;
   copyeditorId: number | null;
+  copyeditorName: string | null;
   copyeditedAt: string | null;
   copyeditNotes: string | null;
   layoutEditorId: number | null;
+  layoutEditorName: string | null;
   layoutAssignedAt: string | null;
   layoutStartedAt: string | null;
   layoutDueDate: string | null;
@@ -99,7 +103,9 @@ export function mapSubmissionDto(dto: SubmissionDto): Submission {
     authorName: dto.authorName,
     authors: dto.authors,
     handlingEditorId: dto.handlingEditorId != null ? String(dto.handlingEditorId) : undefined,
+    handlingEditorName: dto.handlingEditorName ?? undefined,
     reviewerId: dto.reviewerId != null ? String(dto.reviewerId) : undefined,
+    reviewerName: dto.reviewerName ?? undefined,
     pendingReviewerId: dto.pendingReviewerId != null ? String(dto.pendingReviewerId) : undefined,
     reviewerInvitationStatus: lower<ReviewerInvitationStatus>(dto.reviewerInvitationStatus),
     proofReady: dto.proofReady,
@@ -111,9 +117,11 @@ export function mapSubmissionDto(dto: SubmissionDto): Submission {
     editorRecommendationNotes: dto.editorRecommendationNotes ?? undefined,
     editorRecommendationAt: dto.editorRecommendationAt ?? undefined,
     copyeditorId: dto.copyeditorId != null ? String(dto.copyeditorId) : undefined,
+    copyeditorName: dto.copyeditorName ?? undefined,
     copyeditedAt: dto.copyeditedAt ?? undefined,
     copyeditNotes: dto.copyeditNotes ?? undefined,
     layoutEditorId: dto.layoutEditorId != null ? String(dto.layoutEditorId) : undefined,
+    layoutEditorName: dto.layoutEditorName ?? undefined,
     layoutAssignedAt: dto.layoutAssignedAt ?? undefined,
     layoutStartedAt: dto.layoutStartedAt ?? undefined,
     layoutDueDate: dto.layoutDueDate ?? undefined,

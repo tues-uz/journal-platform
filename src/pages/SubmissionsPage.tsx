@@ -27,6 +27,7 @@ import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import { useAuthorSubmissionAccess } from "@/lib/payment/useAuthorSubmissionAccess";
 import { submissionsApi } from "@/lib/api/submissions";
+import { buildUserDirectory } from "@/lib/api/userDirectory";
 import { ALL_STATUSES } from "@/lib/status/config";
 import { routes } from "@/app/routes";
 
@@ -42,9 +43,7 @@ const SubmissionsPage = () => {
     enabled: !!user,
   });
 
-  // Name lookups for handling editor are not resolvable here — /api/users is
-  // publisher-admin-only and there's no general id→name directory endpoint yet.
-  const getUserById = () => undefined;
+  const getUserById = useMemo(() => buildUserDirectory(submissions), [submissions]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -183,7 +182,7 @@ const SubmissionsPage = () => {
                         showLabel={false}
                       />
                     </TableCell>
-                    <TableCell>{sub.handlingEditorId ? "Assigned" : "—"}</TableCell>
+                    <TableCell>{sub.handlingEditorName ?? (sub.handlingEditorId ? "Assigned" : "—")}</TableCell>
                     <TableCell className="text-sm text-gray-500">
                       {new Date(sub.updatedAt).toLocaleDateString()}
                     </TableCell>

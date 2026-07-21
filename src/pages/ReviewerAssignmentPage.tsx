@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { SubmissionListTable } from "@/components/shared/SubmissionListTable";
 import { useAuth } from "@/features/auth/useAuth";
 import { submissionsApi } from "@/lib/api/submissions";
+import { buildUserDirectory } from "@/lib/api/userDirectory";
 import { routes } from "@/app/routes";
 
 export default function ReviewerAssignmentPage() {
@@ -17,8 +18,7 @@ export default function ReviewerAssignmentPage() {
     enabled: !!user,
   });
 
-  // No general id→name directory endpoint yet — see SubmissionsPage.
-  const getUserById = () => undefined;
+  const getUserById = useMemo(() => buildUserDirectory(submissions), [submissions]);
 
   const queue = useMemo(() => {
     if (!user) return [];

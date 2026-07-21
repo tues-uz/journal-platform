@@ -7,6 +7,7 @@ import { SubmissionListTable } from "@/components/shared/SubmissionListTable";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import { submissionsApi } from "@/lib/api/submissions";
+import { buildUserDirectory } from "@/lib/api/userDirectory";
 import { filterSubmissionsForEditorial } from "@/lib/store/submissionFilters";
 import { routes } from "@/app/routes";
 
@@ -20,8 +21,7 @@ export default function EditorialPage() {
     enabled: !!user,
   });
 
-  // No general id→name directory endpoint yet — see SubmissionsPage.
-  const getUserById = () => undefined;
+  const getUserById = useMemo(() => buildUserDirectory(submissions), [submissions]);
 
   const queue = useMemo(() => {
     if (!user) return [];

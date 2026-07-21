@@ -16,6 +16,7 @@ import { usePermissions } from "@/lib/rbac/usePermissions";
 import { routes } from "@/app/routes";
 import { getVisibleSubmissionFiles } from "@/lib/files/submissionFiles";
 import { submissionsApi } from "@/lib/api/submissions";
+import { buildUserDirectory } from "@/lib/api/userDirectory";
 import { getFileDownloadUrl } from "@/lib/api/files";
 import { useToast } from "@/hooks/use-toast";
 
@@ -30,7 +31,10 @@ const SubmissionDetailPage = () => {
     enabled: !!id && !!user,
   });
 
-  const getUserById = () => undefined;
+  const getUserById = useMemo(
+    () => buildUserDirectory(submission ? [submission] : []),
+    [submission],
+  );
 
   const scope = submission && user ? {
     handlingEditorId: submission.handlingEditorId,
@@ -140,7 +144,9 @@ const SubmissionDetailPage = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Handling Editor</p>
-                  <p className="text-sm font-medium">{submission.handlingEditorId ? "Assigned" : "Not assigned"}</p>
+                  <p className="text-sm font-medium">
+                    {submission.handlingEditorName ?? (submission.handlingEditorId ? "Assigned" : "Not assigned")}
+                  </p>
                 </div>
               </div>
               <div>
