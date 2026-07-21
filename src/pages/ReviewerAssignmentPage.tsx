@@ -1,16 +1,24 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SubmissionListTable } from "@/components/shared/SubmissionListTable";
 import { useAuth } from "@/features/auth/useAuth";
-import { useJournalStore } from "@/lib/store/store";
+import { submissionsApi } from "@/lib/api/submissions";
 import { routes } from "@/app/routes";
 
 export default function ReviewerAssignmentPage() {
   const { user } = useAuth();
-  const submissions = useJournalStore((s) => s.submissions);
-  const getUserById = useJournalStore((s) => s.getUserById);
+
+  const { data: submissions = [] } = useQuery({
+    queryKey: ["submissions"],
+    queryFn: () => submissionsApi.list(),
+    enabled: !!user,
+  });
+
+  // No general id→name directory endpoint yet — see SubmissionsPage.
+  const getUserById = () => undefined;
 
   const queue = useMemo(() => {
     if (!user) return [];

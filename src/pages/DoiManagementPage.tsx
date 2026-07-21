@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2 } from "lucide-react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -15,7 +16,9 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
-import { useJournalStore } from "@/lib/store/store";
+import { submissionsApi } from "@/lib/api/submissions";
+import { workflowApi } from "@/lib/api/workflow";
+import { ApiClientError } from "@/lib/api/client";
 import { routes } from "@/app/routes";
 import { useToast } from "@/hooks/use-toast";
 
@@ -23,9 +26,13 @@ export default function DoiManagementPage() {
   const { user } = useAuth();
   const { can } = usePermissions();
   const { toast } = useToast();
-  const submissions = useJournalStore((s) => s.submissions);
-  const assignDoi = useJournalStore((s) => s.assignDoi);
-  const getUserById = useJournalStore((s) => s.getUserById);
+  const queryClient = useQueryClient();
+
+  const { data: submissions = [] } = useQuery({
+    queryKey: ["submissions"],
+    queryFn: () => submissionsApi.list(),
+    enabled: !!user,
+  });
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [doiValue, setDoiValue] = useState("");
@@ -38,6 +45,20 @@ export default function DoiManagementPage() {
     [submissions],
   );
 
+  const assignDoiMutation = useMutation({
+    mutationFn: ({ id, doi }: { id: string; doi: string }) => workflowApi.assignDoi(id, doi),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["submissions"] });
+      toast({ title: "DOI assigned" });
+      setEditingId(null);
+      setDoiValue("");
+    },
+    onError: (err) => {
+      const message = err instanceof ApiClientError ? err.message : "Failed to assign DOI. Please try again.";
+      toast({ title: "DOI assignment failed", description: message, variant: "destructive" });
+    },
+  });
+
   const startEdit = (id: string, current?: string) => {
     setEditingId(id);
     setDoiValue(current ?? "");
@@ -49,10 +70,7 @@ export default function DoiManagementPage() {
       toast({ title: "DOI required", variant: "destructive" });
       return;
     }
-    assignDoi(id, doiValue.trim(), user.id, user.name);
-    toast({ title: "DOI assigned" });
-    setEditingId(null);
-    setDoiValue("");
+    assignDoiMutation.mutate({ id, doi: doiValue.trim() });
   };
 
   return (
@@ -80,7 +98,6 @@ export default function DoiManagementPage() {
             </TableHeader>
             <TableBody>
               {candidates.map((sub) => {
-                const author = getUserById(sub.authorId);
                 const isEditing = editingId === sub.id;
                 return (
                   <TableRow key={sub.id}>
@@ -88,7 +105,7 @@ export default function DoiManagementPage() {
                       <p className="font-medium">{sub.submissionNumber}</p>
                       <p className="text-sm text-gray-500 truncate max-w-xs">{sub.title}</p>
                     </TableCell>
-                    <TableCell>{author?.name ?? "—"}</TableCell>
+                    <TableCell>{sub.authorName ?? "—"}</TableCell>
                     <TableCell className="capitalize">{sub.status.replace(/_/g, " ")}</TableCell>
                     <TableCell>
                       {isEditing ? (
@@ -105,10 +122,21 @@ export default function DoiManagementPage() {
                     <TableCell className="text-right space-x-2">
                       {isEditing ? (
                         <>
-                          <Button size="sm" className="rounded-lg" onClick={() => saveDoi(sub.id)}>
-                            Save
+                          <Button
+                            size="sm"
+                            className="rounded-lg"
+                            disabled={assignDoiMutation.isPending}
+                            onClick={() => saveDoi(sub.id)}
+                          >
+                            {assignDoiMutation.isPending ? "Saving..." : "Save"}
                           </Button>
-                          <Button size="sm" variant="outline" className="rounded-lg" onClick={() => setEditingId(null)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-lg"
+                            disabled={assignDoiMutation.isPending}
+                            onClick={() => setEditingId(null)}
+                          >
                             Cancel
                           </Button>
                         </>

@@ -1,16 +1,26 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { FolderOpen } from "lucide-react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { LayoutAssignedArticlesTable } from "@/components/layout-editor/LayoutAssignedArticlesTable";
 import { useAuth } from "@/features/auth/useAuth";
+import { submissionsApi } from "@/lib/api/submissions";
 import { useJournalStore } from "@/lib/store/store";
 import { filterLayoutProductionFiles } from "@/lib/store/submissionFilters";
 import { routes } from "@/app/routes";
 
 export default function LayoutFilesPage() {
   const { user } = useAuth();
-  const submissions = useJournalStore((s) => s.submissions);
+
+  const { data: submissions = [] } = useQuery({
+    queryKey: ["submissions"],
+    queryFn: () => submissionsApi.list(),
+    enabled: !!user,
+  });
+
+  // Volumes/issues aren't wired to the real publication API yet, so this
+  // display-only lookup still reads the mock store.
   const volumes = useJournalStore((s) => s.volumes);
   const journalSettings = useJournalStore((s) => s.journalSettings);
 
