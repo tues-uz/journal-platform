@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { PaymentListTable } from "@/components/shared/PaymentListTable";
 import { PaymentProofPreview } from "@/components/shared/PaymentProofPreview";
@@ -18,8 +19,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import { formatPaymentAmount } from "@/lib/payment/access";
-import { useJournalStore } from "@/lib/store/store";
-import type { PaymentRequest, PaymentStatus } from "@/lib/store/types";
+import { paymentsApi, type ManagedPayment } from "@/lib/api/payments";
+import { ApiClientError } from "@/lib/api/client";
+import type { PaymentStatus } from "@/lib/store/types";
 import { routes } from "@/app/routes";
 import { useToast } from "@/hooks/use-toast";
 
@@ -29,22 +31,35 @@ const AdminPaymentsPage = () => {
   const { user } = useAuth();
   const { can } = usePermissions();
   const { toast } = useToast();
-  const payments = useJournalStore((s) => s.payments);
-  const getUserById = useJournalStore((s) => s.getUserById);
-  const approvePaymentRequest = useJournalStore((s) => s.approvePaymentRequest);
-  const rejectPaymentRequest = useJournalStore((s) => s.rejectPaymentRequest);
+  const queryClient = useQueryClient();
+
+  const { data: payments = [] } = useQuery({
+    queryKey: ["payments", "all"],
+    queryFn: () => paymentsApi.listAll(),
+    enabled: !!user && can("author_payment", "view"),
+  });
 
   const [filter, setFilter] = useState<FilterStatus>("all");
   const [search, setSearch] = useState("");
-  const [selectedPayment, setSelectedPayment] = useState<PaymentRequest | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<ManagedPayment | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
 
-  if (!can("author_payment", "view")) {
-    return <Navigate to={routes.dashboard} replace />;
-  }
-
-  const pendingCount = payments.filter((p) => p.status === "pending_review").length;
+  const reviewMutation = useMutation({
+    mutationFn: ({ id, approve, reason }: { id: string; approve: boolean; reason?: string }) =>
+      paymentsApi.review(id, approve, reason),
+    onSuccess: (_updated, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ["payments"] });
+      toast({ title: variables.approve ? "Payment approved." : "Payment rejected." });
+      setSelectedPayment(null);
+      setShowRejectForm(false);
+      setRejectReason("");
+    },
+    onError: (err) => {
+      const message = err instanceof ApiClientError ? err.message : "Unable to review payment.";
+      toast({ title: "Review failed", description: message, variant: "destructive" });
+    },
+  });
 
   const filtered = useMemo(() => {
     let list =
@@ -52,52 +67,36 @@ const AdminPaymentsPage = () => {
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      list = list.filter((payment) => {
-        const author = getUserById(payment.authorId);
-        return (
-          payment.id.toLowerCase().includes(q) ||
+      list = list.filter(
+        (payment) =>
+          payment.id.includes(q) ||
           payment.referenceNote?.toLowerCase().includes(q) ||
-          payment.proofFile.name.toLowerCase().includes(q) ||
-          author?.name.toLowerCase().includes(q) ||
-          author?.email.toLowerCase().includes(q)
-        );
-      });
+          payment.authorName.toLowerCase().includes(q),
+      );
     }
 
     return [...list].sort(
       (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
     );
-  }, [payments, filter, search, getUserById]);
+  }, [payments, filter, search]);
 
-  const selectedAuthor = selectedPayment ? getUserById(selectedPayment.authorId) : undefined;
+  if (!can("author_payment", "view")) {
+    return <Navigate to={routes.dashboard} replace />;
+  }
+
+  const pendingCount = payments.filter((p) => p.status === "pending_review").length;
 
   const handleApprove = () => {
-    if (!user || !selectedPayment) return;
-    const success = approvePaymentRequest(selectedPayment.id, user.id);
-    if (!success) {
-      toast({ title: "Unable to approve payment.", variant: "destructive" });
-      return;
-    }
-    toast({ title: "Payment approved." });
-    setSelectedPayment(null);
-    setShowRejectForm(false);
-    setRejectReason("");
+    if (!selectedPayment) return;
+    reviewMutation.mutate({ id: selectedPayment.id, approve: true });
   };
 
   const handleReject = () => {
-    if (!user || !selectedPayment || !rejectReason.trim()) {
+    if (!selectedPayment || !rejectReason.trim()) {
       toast({ title: "Please provide a rejection reason.", variant: "destructive" });
       return;
     }
-    const success = rejectPaymentRequest(selectedPayment.id, user.id, rejectReason);
-    if (!success) {
-      toast({ title: "Unable to reject payment.", variant: "destructive" });
-      return;
-    }
-    toast({ title: "Payment rejected." });
-    setSelectedPayment(null);
-    setShowRejectForm(false);
-    setRejectReason("");
+    reviewMutation.mutate({ id: selectedPayment.id, approve: false, reason: rejectReason.trim() });
   };
 
   const filterButtons: { value: FilterStatus; label: string }[] = [
@@ -139,7 +138,7 @@ const AdminPaymentsPage = () => {
 
       <div className="mb-6">
         <Input
-          placeholder="Search by author, email, reference, or payment ID..."
+          placeholder="Search by author, reference, or payment ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-md rounded-xl"
@@ -148,7 +147,6 @@ const AdminPaymentsPage = () => {
 
       <PaymentListTable
         payments={filtered}
-        getUserById={getUserById}
         emptyMessage={emptyMessage}
         onReview={(payment) => {
           setSelectedPayment(payment);
@@ -176,7 +174,7 @@ const AdminPaymentsPage = () => {
               <div className="text-sm space-y-1">
                 <p>
                   <span className="font-medium text-gray-700">Author:</span>{" "}
-                  {selectedAuthor?.name} ({selectedAuthor?.email})
+                  {selectedPayment.authorName}
                 </p>
                 <p>
                   <span className="font-medium text-gray-700">Amount:</span>{" "}
@@ -197,7 +195,7 @@ const AdminPaymentsPage = () => {
                 </div>
               </div>
 
-              <PaymentProofPreview file={selectedPayment.proofFile} />
+              <PaymentProofPreview paymentId={selectedPayment.id} />
 
               {selectedPayment.status === "rejected" && selectedPayment.rejectionReason && (
                 <p className="text-sm text-red-700 bg-red-50 rounded-xl p-3">
@@ -228,20 +226,35 @@ const AdminPaymentsPage = () => {
               <>
                 {showRejectForm ? (
                   <>
-                    <Button variant="outline" className="rounded-xl" onClick={() => setShowRejectForm(false)}>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl"
+                      disabled={reviewMutation.isPending}
+                      onClick={() => setShowRejectForm(false)}
+                    >
                       Cancel
                     </Button>
-                    <Button variant="destructive" className="rounded-xl" onClick={handleReject}>
-                      Confirm Reject
+                    <Button
+                      variant="destructive"
+                      className="rounded-xl"
+                      disabled={reviewMutation.isPending}
+                      onClick={handleReject}
+                    >
+                      {reviewMutation.isPending ? "Rejecting..." : "Confirm Reject"}
                     </Button>
                   </>
                 ) : (
                   <>
-                    <Button variant="outline" className="rounded-xl" onClick={() => setShowRejectForm(true)}>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl"
+                      disabled={reviewMutation.isPending}
+                      onClick={() => setShowRejectForm(true)}
+                    >
                       Reject
                     </Button>
-                    <Button className="rounded-xl" onClick={handleApprove}>
-                      Approve
+                    <Button className="rounded-xl" disabled={reviewMutation.isPending} onClick={handleApprove}>
+                      {reviewMutation.isPending ? "Approving..." : "Approve"}
                     </Button>
                   </>
                 )}

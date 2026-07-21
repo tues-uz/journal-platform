@@ -1,23 +1,39 @@
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
-import { useJournalStore } from "@/lib/store/store";
+import { paymentsApi } from "@/lib/api/payments";
+import { isPureAuthor } from "@/lib/payment/access";
 
-/**
- * Payments aren't wired to the real API yet (Phase 6) — the mock store's
- * payment records don't correspond to real user ids, so gating on them here
- * would block/allow submission creation based on stale, unrelated data. The
- * backend already enforces the real payment requirement server-side
- * (POST /api/submissions 403s with a clear message when unpaid), so until
- * Phase 6 lands, defer to the backend rather than a local (wrong) gate.
- */
 export function useAuthorSubmissionAccess() {
   const { user } = useAuth();
   const { can } = usePermissions();
-  const paymentSettings = useJournalStore((s) => s.paymentSettings);
+
+  const { data: paymentSettings } = useQuery({
+    queryKey: ["payment-settings"],
+    queryFn: () => paymentsApi.getSettings(),
+    enabled: !!user,
+  });
+
+  const paymentGated = !!user && !!paymentSettings?.enabled && isPureAuthor(user.roles);
+
+  const { data: ownPayments = [] } = useQuery({
+    queryKey: ["payments", "all"],
+    queryFn: () => paymentsApi.listAll(),
+    enabled: paymentGated,
+    select: (payments) => payments.filter((p) => p.authorId === user?.id),
+  });
+
+  const latestPayment = [...ownPayments].sort(
+    (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
+  )[0];
+
+  const hasApprovedPayment = ownPayments.some((p) => p.status === "approved");
+  const needsPayment = paymentGated && !hasApprovedPayment;
 
   return {
-    canCreateSubmission: can("submission", "create"),
-    needsPayment: false,
+    canCreateSubmission: can("submission", "create") && !needsPayment,
+    needsPayment,
     paymentSettings,
+    latestPayment,
   };
 }

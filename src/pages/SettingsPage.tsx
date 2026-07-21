@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Settings, User, Banknote, Languages } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
@@ -14,6 +15,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
+import { paymentsApi } from "@/lib/api/payments";
+import { ApiClientError } from "@/lib/api/client";
 import { useJournalStore } from "@/lib/store/store";
 import { ROLE_LABELS } from "@/lib/rbac/types";
 import { routes } from "@/app/routes";
@@ -24,26 +27,43 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const { can } = usePermissions();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const settings = useJournalStore((s) => s.journalSettings);
-  const paymentSettings = useJournalStore((s) => s.paymentSettings);
-  const updatePaymentSettings = useJournalStore((s) => s.updatePaymentSettings);
   const getUserById = useJournalStore((s) => s.getUserById);
   const updatedBy = getUserById(settings.updatedBy);
-  const paymentUpdatedBy = getUserById(paymentSettings.updatedBy);
 
   const canEditPayment = can("author_payment", "edit");
 
+  const { data: paymentSettings } = useQuery({
+    queryKey: ["payment-settings"],
+    queryFn: () => paymentsApi.getSettings(),
+    enabled: !!user && can("author_payment", "view"),
+  });
+
+  const savePaymentSettingsMutation = useMutation({
+    mutationFn: paymentsApi.updateSettings,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["payment-settings"] });
+      toast({ title: t("settings.submissionFee.saved") });
+    },
+    onError: (err) => {
+      const message = err instanceof ApiClientError ? err.message : "Failed to save payment settings.";
+      toast({ title: "Save failed", description: message, variant: "destructive" });
+    },
+  });
+
   const [paymentForm, setPaymentForm] = useState({
-    enabled: paymentSettings.enabled,
-    amount: String(paymentSettings.amount),
-    currency: paymentSettings.currency,
-    bankName: paymentSettings.bankName,
-    accountName: paymentSettings.accountName,
-    accountNumber: paymentSettings.accountNumber,
-    transferInstructions: paymentSettings.transferInstructions ?? "",
+    enabled: false,
+    amount: "0",
+    currency: "IDR",
+    bankName: "",
+    accountName: "",
+    accountNumber: "",
+    transferInstructions: "",
   });
 
   useEffect(() => {
+    if (!paymentSettings) return;
     setPaymentForm({
       enabled: paymentSettings.enabled,
       amount: String(paymentSettings.amount),
@@ -56,7 +76,6 @@ export default function SettingsPage() {
   }, [paymentSettings]);
 
   const handleSavePaymentSettings = () => {
-    if (!user) return;
     const amount = Number(paymentForm.amount);
     if (!paymentForm.bankName || !paymentForm.accountName || !paymentForm.accountNumber || !amount) {
       toast({
@@ -65,19 +84,15 @@ export default function SettingsPage() {
       });
       return;
     }
-    updatePaymentSettings(
-      {
-        enabled: paymentForm.enabled,
-        amount,
-        currency: paymentForm.currency.trim() || "IDR",
-        bankName: paymentForm.bankName.trim(),
-        accountName: paymentForm.accountName.trim(),
-        accountNumber: paymentForm.accountNumber.trim(),
-        transferInstructions: paymentForm.transferInstructions.trim() || undefined,
-      },
-      user.id,
-    );
-    toast({ title: t("settings.submissionFee.saved") });
+    savePaymentSettingsMutation.mutate({
+      enabled: paymentForm.enabled,
+      amount,
+      currency: paymentForm.currency.trim() || "IDR",
+      bankName: paymentForm.bankName.trim(),
+      accountName: paymentForm.accountName.trim(),
+      accountNumber: paymentForm.accountNumber.trim(),
+      transferInstructions: paymentForm.transferInstructions.trim() || undefined,
+    });
   };
 
   const rows = [
@@ -183,7 +198,7 @@ export default function SettingsPage() {
                 <CardTitle className="text-lg">{t("settings.submissionFee.title")}</CardTitle>
                 <p className="text-sm text-gray-500 mt-1">{t("settings.submissionFee.subtitle")}</p>
               </div>
-              {paymentUpdatedBy && (
+              {paymentSettings?.updatedAt && (
                 <Badge variant="secondary" className="rounded-lg ml-auto">
                   {t("settings.submissionFee.updated", {
                     date: new Date(paymentSettings.updatedAt).toLocaleDateString(),
@@ -276,8 +291,12 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <Button className="rounded-xl" onClick={handleSavePaymentSettings}>
-              {t("settings.submissionFee.save")}
+            <Button
+              className="rounded-xl"
+              onClick={handleSavePaymentSettings}
+              disabled={savePaymentSettingsMutation.isPending}
+            >
+              {savePaymentSettingsMutation.isPending ? "Saving..." : t("settings.submissionFee.save")}
             </Button>
           </CardContent>
         </Card>
