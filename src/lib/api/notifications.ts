@@ -31,8 +31,4 @@ export const notificationsApi = {
     const dto = await apiRequest<NotificationDto>(`/api/notifications/${id}/read`, { method: "PATCH" });
     return mapNotificationDto(dto);
   },
-
-  async markAllRead(): Promise<void> {
-    await apiRequest<null>("/api/notifications/read-all", { method: "POST" });
-  },
 };
