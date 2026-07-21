@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Users, Shield } from "lucide-react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,8 @@ import {
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
-import { useJournalStore } from "@/lib/store/store";
+import { usersApi } from "@/lib/api/users";
+import { ApiClientError } from "@/lib/api/client";
 import { ASSIGNABLE_ROLES, ROLE_LABELS, type Role } from "@/lib/rbac/types";
 import { routes } from "@/app/routes";
 import { useToast } from "@/hooks/use-toast";
@@ -40,10 +42,57 @@ const UsersPage = () => {
   const { user, refreshUser } = useAuth();
   const { can } = usePermissions();
   const { toast } = useToast();
-  const users = useJournalStore((s) => s.users);
-  const createUser = useJournalStore((s) => s.createUser);
-  const updateUserRoles = useJournalStore((s) => s.updateUserRoles);
-  const updateUserStatus = useJournalStore((s) => s.updateUserStatus);
+  const queryClient = useQueryClient();
+
+  const { data: users = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => usersApi.list(),
+    enabled: !!user && can("user_management", "view"),
+  });
+
+  const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ["users"] });
+
+  const createMutation = useMutation({
+    mutationFn: usersApi.create,
+    onSuccess: () => {
+      invalidateUsers();
+      toast({ title: "User created successfully." });
+      setCreateOpen(false);
+      setForm({ name: "", email: "", password: "" });
+      setSelectedRole("");
+    },
+    onError: (err) => {
+      const message = err instanceof ApiClientError ? err.message : "Failed to create user. Please try again.";
+      toast({ title: "Create failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const rolesMutation = useMutation({
+    mutationFn: ({ id, roles }: { id: string; roles: Role[] }) => usersApi.updateRoles(id, roles),
+    onSuccess: () => {
+      invalidateUsers();
+      toast({ title: "Roles updated successfully." });
+      void refreshUser();
+      setRoleOpen(false);
+    },
+    onError: (err) => {
+      const message = err instanceof ApiClientError ? err.message : "Failed to update roles. Please try again.";
+      toast({ title: "Update failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "active" | "inactive" }) =>
+      usersApi.updateStatus(id, status),
+    onSuccess: (updated) => {
+      invalidateUsers();
+      toast({ title: `User ${updated.status === "active" ? "activated" : "deactivated"}.` });
+    },
+    onError: (err) => {
+      const message = err instanceof ApiClientError ? err.message : "Failed to update status. Please try again.";
+      toast({ title: "Update failed", description: message, variant: "destructive" });
+    },
+  });
 
   const [createOpen, setCreateOpen] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
@@ -66,15 +115,11 @@ const UsersPage = () => {
       toast({ title: "Please fill all fields and select a role.", variant: "destructive" });
       return;
     }
-    if (users.some((u) => u.email.toLowerCase() === form.email.toLowerCase())) {
-      toast({ title: "Email already exists.", variant: "destructive" });
+    if (form.password.length < 8) {
+      toast({ title: "Password must be at least 8 characters.", variant: "destructive" });
       return;
     }
-    createUser({ ...form, roles: [selectedRole], status: "active" });
-    toast({ title: "User created successfully." });
-    setCreateOpen(false);
-    setForm({ name: "", email: "", password: "" });
-    setSelectedRole("");
+    createMutation.mutate({ ...form, roles: [selectedRole] });
   };
 
   const handleSaveRoles = () => {
@@ -83,18 +128,25 @@ const UsersPage = () => {
     const roles: Role[] = target?.roles.includes("author")
       ? ["author", selectedRole]
       : [selectedRole];
-    const success = updateUserRoles(selectedUserId, roles, user.id);
-    if (!success) {
-      toast({
-        title: "Cannot remove admin role",
-        description: "You are the only active admin. Assign another admin first.",
-        variant: "destructive",
-      });
-      return;
+
+    const isSelf = selectedUserId === user.id;
+    const removingAdmin =
+      isSelf && target?.roles.includes("publisher_admin") && !roles.includes("publisher_admin");
+    if (removingAdmin) {
+      const otherActiveAdmins = users.filter(
+        (u) => u.id !== selectedUserId && u.status === "active" && u.roles.includes("publisher_admin"),
+      );
+      if (otherActiveAdmins.length === 0) {
+        toast({
+          title: "Cannot remove admin role",
+          description: "You are the only active admin. Assign another admin first.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
-    toast({ title: "Roles updated successfully." });
-    refreshUser();
-    setRoleOpen(false);
+
+    rolesMutation.mutate({ id: selectedUserId, roles });
   };
 
   const openRoleDialog = (userId: string) => {
@@ -182,10 +234,13 @@ const UsersPage = () => {
                           variant="outline"
                           size="sm"
                           className="rounded-lg"
-                          onClick={() => {
-                            updateUserStatus(u.id, u.status === "active" ? "inactive" : "active");
-                            toast({ title: `User ${u.status === "active" ? "deactivated" : "activated"}.` });
-                          }}
+                          disabled={statusMutation.isPending}
+                          onClick={() =>
+                            statusMutation.mutate({
+                              id: u.id,
+                              status: u.status === "active" ? "inactive" : "active",
+                            })
+                          }
                         >
                           {u.status === "active" ? "Deactivate" : "Activate"}
                         </Button>
@@ -251,11 +306,16 @@ const UsersPage = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)} className="rounded-xl">
+            <Button
+              variant="outline"
+              onClick={() => setCreateOpen(false)}
+              className="rounded-xl"
+              disabled={createMutation.isPending}
+            >
               Cancel
             </Button>
-            <Button onClick={handleCreate} className="rounded-xl">
-              Create
+            <Button onClick={handleCreate} className="rounded-xl" disabled={createMutation.isPending}>
+              {createMutation.isPending ? "Creating..." : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -287,11 +347,20 @@ const UsersPage = () => {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRoleOpen(false)} className="rounded-xl">
+            <Button
+              variant="outline"
+              onClick={() => setRoleOpen(false)}
+              className="rounded-xl"
+              disabled={rolesMutation.isPending}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSaveRoles} disabled={!selectedRole} className="rounded-xl">
-              Save Roles
+            <Button
+              onClick={handleSaveRoles}
+              disabled={!selectedRole || rolesMutation.isPending}
+              className="rounded-xl"
+            >
+              {rolesMutation.isPending ? "Saving..." : "Save Roles"}
             </Button>
           </DialogFooter>
         </DialogContent>
