@@ -14,7 +14,8 @@ import {
   getRedirectFeedback,
   runPostSignInRedirect,
 } from "@/features/auth/signInFlow";
-import { useJournalStore } from "@/lib/store/store";
+import { authApi } from "@/lib/api/auth";
+import { ApiClientError } from "@/lib/api/client";
 import { SEED_USERS } from "@/lib/store/seed";
 import { ROLE_LABELS } from "@/lib/rbac/types";
 
@@ -36,7 +37,6 @@ const JournalSignIn = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { login, isAuthenticated } = useAuth();
-  const authenticate = useJournalStore((s) => s.authenticate);
   const redirectFeedback = getRedirectFeedback(redirectStatus);
 
   useEffect(() => {
@@ -64,53 +64,46 @@ const JournalSignIn = () => {
     return <Navigate to={routes.dashboard} replace />;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
     setRedirectStatus("idle");
     setDisplayProgress(getRedirectFeedback("idle").progress);
 
-    setTimeout(() => {
-      const storeUser = authenticate(email, password);
+    try {
+      const { tokens, user } = await authApi.login(email, password);
+      login(tokens, user);
 
-      if (storeUser) {
-        login({
-          id: storeUser.id,
-          name: storeUser.name,
-          email: storeUser.email,
-          roles: storeUser.roles,
-          avatarUrl: storeUser.avatarUrl,
-        });
+      toast({
+        title: "Welcome back!",
+        description: `Signed in as ${user.name}`,
+      });
 
-        toast({
-          title: "Welcome back!",
-          description: `Signed in as ${storeUser.name}`,
-        });
-
-        setTimeout(() => {
-          void runPostSignInRedirect(prefetchRoute, navigate, routes.dashboard, (status) => {
-            setRedirectStatus(status);
-          }).catch(() => {
-            setIsLoading(false);
-            setRedirectStatus("idle");
-            toast({
-              title: "Unable to open dashboard",
-              description: "Please try again.",
-              variant: "destructive",
-            });
+      setTimeout(() => {
+        void runPostSignInRedirect(prefetchRoute, navigate, routes.dashboard, (status) => {
+          setRedirectStatus(status);
+        }).catch(() => {
+          setIsLoading(false);
+          setRedirectStatus("idle");
+          toast({
+            title: "Unable to open dashboard",
+            description: "Please try again.",
+            variant: "destructive",
           });
-        }, 500);
-      } else {
-        setError("Invalid email or password. Please try again.");
-        setIsLoading(false);
-        toast({
-          title: "Sign in failed",
-          description: "Invalid email or password.",
-          variant: "destructive",
         });
-      }
-    }, 400);
+      }, 300);
+    } catch (err) {
+      const message =
+        err instanceof ApiClientError ? err.message : "Invalid email or password. Please try again.";
+      setError(message);
+      setIsLoading(false);
+      toast({
+        title: "Sign in failed",
+        description: message,
+        variant: "destructive",
+      });
+    }
   };
 
   const fillDemo = (demoEmail: string, demoPassword: string) => {

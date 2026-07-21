@@ -19,6 +19,8 @@ import {
   hasRegistrationErrors,
   validateAuthorRegistration,
 } from "@/features/auth/registerAuthor";
+import { authApi } from "@/lib/api/auth";
+import { ApiClientError } from "@/lib/api/client";
 import { useJournalStore } from "@/lib/store/store";
 
 const JournalRegister = () => {
@@ -36,7 +38,6 @@ const JournalRegister = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { login, isAuthenticated } = useAuth();
-  const registerAuthor = useJournalStore((s) => s.registerAuthor);
   const paymentSettings = useJournalStore((s) => s.paymentSettings);
   const redirectFeedback = getRedirectFeedback(redirectStatus);
 
@@ -65,7 +66,7 @@ const JournalRegister = () => {
     return <Navigate to={routes.dashboard} replace />;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -86,32 +87,15 @@ const JournalRegister = () => {
     setRedirectStatus("idle");
     setDisplayProgress(getRedirectFeedback("idle").progress);
 
-    setTimeout(() => {
-      const result = registerAuthor({
+    try {
+      const { tokens, user } = await authApi.register({
         name,
         email,
         password,
-        institution,
+        institution: institution || undefined,
       });
 
-      if (!result.success || !result.user) {
-        setError(result.error ?? "Unable to create account.");
-        setIsLoading(false);
-        toast({
-          title: "Registration failed",
-          description: result.error ?? "Unable to create account.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      login({
-        id: result.user.id,
-        name: result.user.name,
-        email: result.user.email,
-        roles: result.user.roles,
-        avatarUrl: result.user.avatarUrl,
-      });
+      login(tokens, user);
 
       toast({
         title: "Account created",
@@ -124,8 +108,9 @@ const JournalRegister = () => {
           navigate,
           paymentSettings.enabled ? routes.payment : routes.dashboard,
           (status) => {
-          setRedirectStatus(status);
-        }).catch(() => {
+            setRedirectStatus(status);
+          },
+        ).catch(() => {
           setIsLoading(false);
           setRedirectStatus("idle");
           toast({
@@ -134,8 +119,17 @@ const JournalRegister = () => {
             variant: "destructive",
           });
         });
-      }, 500);
-    }, 400);
+      }, 300);
+    } catch (err) {
+      const message = err instanceof ApiClientError ? err.message : "Unable to create account.";
+      setError(message);
+      setIsLoading(false);
+      toast({
+        title: "Registration failed",
+        description: message,
+        variant: "destructive",
+      });
+    }
   };
 
   return (

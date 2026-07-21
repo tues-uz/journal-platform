@@ -9,7 +9,7 @@ export type ArticleStatus =
   | "revision_required";
 
 export interface Article {
-  id: number;
+  id: string;
   proposalNumber?: string;
   title: string;
   category: string;

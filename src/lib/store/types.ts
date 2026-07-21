@@ -124,6 +124,7 @@ export interface Submission {
   articleType: string;
   status: SubmissionStatus;
   authorId: string;
+  authorName?: string;
   authors: SubmissionAuthor[];
   handlingEditorId?: string;
   reviewerId?: string;

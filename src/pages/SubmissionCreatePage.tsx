@@ -17,10 +17,12 @@ import { FileUpload, type UploadedFileMeta } from "@/components/shared/FileUploa
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import { useAuthorSubmissionAccess } from "@/lib/payment/useAuthorSubmissionAccess";
-import { useJournalStore } from "@/lib/store/store";
 import { routes } from "@/app/routes";
 import { useToast } from "@/hooks/use-toast";
-import { buildSubmissionFilesFromUpload, MANUSCRIPT_UPLOAD_ACCEPT, MANUSCRIPT_UPLOAD_HINT } from "@/lib/files/submissionFiles";
+import { MANUSCRIPT_UPLOAD_ACCEPT, MANUSCRIPT_UPLOAD_HINT } from "@/lib/files/submissionFiles";
+import { submissionsApi } from "@/lib/api/submissions";
+import { uploadSubmissionFiles } from "@/lib/api/files";
+import { ApiClientError } from "@/lib/api/client";
 import type { SubmissionAuthor } from "@/lib/store/types";
 
 const STEPS = ["Article Information", "Authors", "Files", "Preview & Submit"];
@@ -30,12 +32,6 @@ const SubmissionCreatePage = () => {
   const { user } = useAuth();
   const { can } = usePermissions();
   const { toast } = useToast();
-  const addSubmission = useJournalStore((s) => s.addSubmission);
-  const addActivity = useJournalStore((s) => s.addActivity);
-  const addNotification = useJournalStore((s) => s.addNotification);
-  const users = useJournalStore((s) => s.users);
-  const getUserById = useJournalStore((s) => s.getUserById);
-  const storeUser = user ? getUserById(user.id) : undefined;
   const { needsPayment } = useAuthorSubmissionAccess();
 
   const [step, setStep] = useState(0);
@@ -48,8 +44,9 @@ const SubmissionCreatePage = () => {
   const [manuscriptFiles, setManuscriptFiles] = useState<UploadedFileMeta[]>([]);
   const [coverFiles, setCoverFiles] = useState<UploadedFileMeta[]>([]);
   const [additionalFiles, setAdditionalFiles] = useState<UploadedFileMeta[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const authorInstitution = storeUser?.institution ?? "";
+  const authorInstitution = user?.institution ?? "";
 
   if (!can("submission", "create")) {
     return <Navigate to={routes.dashboard} replace />;
@@ -66,137 +63,58 @@ const SubmissionCreatePage = () => {
     return true;
   };
 
-  const handleSaveDraft = async () => {
-    if (!user) return;
+  const createAndUpload = async (saveAsDraft: boolean) => {
+    if (!user || isSaving) return;
 
-    const now = new Date().toISOString();
-    const id = `sub-${Date.now()}`;
-    const submissionNumber = `SJMS-2026-${String(Math.floor(Math.random() * 900) + 100)}`;
+    setIsSaving(true);
+    try {
+      const authors: SubmissionAuthor[] = [
+        {
+          name: user.name,
+          email: user.email,
+          institution: authorInstitution,
+          orcid: orcid || undefined,
+          isCorresponding: true,
+        },
+      ];
 
-    const authors: SubmissionAuthor[] = [
-      {
-        name: user.name,
-        email: user.email,
-        institution: authorInstitution,
-        orcid: orcid || undefined,
-        isCorresponding: true,
-      },
-    ];
-
-    const [manuscriptSubmissionFiles, coverSubmissionFiles, additionalSubmissionFiles] =
-      await Promise.all([
-        buildSubmissionFilesFromUpload(manuscriptFiles, "manuscript", `file-${id}`),
-        buildSubmissionFilesFromUpload(coverFiles, "cover_letter", `file-cover-${id}`),
-        buildSubmissionFilesFromUpload(additionalFiles, "supporting", `file-additional-${id}`),
-      ]);
-
-    const submission = {
-      id,
-      submissionNumber,
-      title,
-      abstract,
-      keywords: keywords.split(",").map((k) => k.trim()).filter(Boolean),
-      language,
-      articleType,
-      status: "draft" as const,
-      authorId: user.id,
-      authors,
-      files: [...manuscriptSubmissionFiles, ...coverSubmissionFiles, ...additionalSubmissionFiles],
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    addSubmission(submission);
-    addActivity({
-      submissionId: id,
-      action: "Draft Created",
-      actorId: user.id,
-      actorName: user.name,
-      actorRoles: user.roles,
-      statusAfter: "draft",
-      timestamp: now,
-    });
-
-    toast({ title: "Draft saved. Submit when ready." });
-    navigate(routes.submissionEdit(id));
-  };
-
-  const handleSubmit = async () => {
-    if (!user) return;
-
-    const now = new Date().toISOString();
-    const id = `sub-${Date.now()}`;
-    const submissionNumber = `SJMS-2026-${String(Math.floor(Math.random() * 900) + 100)}`;
-
-    const authors: SubmissionAuthor[] = [
-      {
-        name: user.name,
-        email: user.email,
-        institution: authorInstitution,
-        orcid: orcid || undefined,
-        isCorresponding: true,
-      },
-    ];
-
-    const [manuscriptSubmissionFiles, coverSubmissionFiles, additionalSubmissionFiles] =
-      await Promise.all([
-        buildSubmissionFilesFromUpload(manuscriptFiles, "manuscript", `file-${id}`),
-        buildSubmissionFilesFromUpload(coverFiles, "cover_letter", `file-cover-${id}`),
-        buildSubmissionFilesFromUpload(additionalFiles, "supporting", `file-additional-${id}`),
-      ]);
-
-    const submission = {
-      id,
-      submissionNumber,
-      title,
-      abstract,
-      keywords: keywords.split(",").map((k) => k.trim()).filter(Boolean),
-      language,
-      articleType,
-      status: "administrative_review" as const,
-      plagiarismStatus: "pending" as const,
-      authorId: user.id,
-      authors,
-      files: [...manuscriptSubmissionFiles, ...coverSubmissionFiles, ...additionalSubmissionFiles],
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    addSubmission(submission);
-    addActivity({
-      submissionId: id,
-      action: "Submission Created",
-      actorId: user.id,
-      actorName: user.name,
-      actorRoles: user.roles,
-      timestamp: now,
-    });
-    addActivity({
-      submissionId: id,
-      action: "Awaiting Administrative Screening",
-      actorId: user.id,
-      actorName: user.name,
-      actorRoles: user.roles,
-      statusAfter: "administrative_review",
-      timestamp: now,
-    });
-
-    users
-      .filter((u) => u.status === "active" && u.roles.includes("editorial_staff"))
-      .forEach((staff) => {
-        addNotification({
-          userId: staff.id,
-          title: "New Submission for Screening",
-          message: `${submissionNumber} requires administrative screening.`,
-          read: false,
-          createdAt: now,
-          link: routes.submissionById(id),
-        });
+      const submission = await submissionsApi.create({
+        title,
+        abstractText: abstract,
+        keywords: keywords.split(",").map((k) => k.trim()).filter(Boolean),
+        language,
+        articleType,
+        authors,
+        saveAsDraft,
       });
 
-    toast({ title: "Submission submitted successfully." });
-    navigate(routes.submissionById(id));
+      const manuscript = manuscriptFiles.map((f) => f.file).filter((f): f is File => !!f);
+      const cover = coverFiles.map((f) => f.file).filter((f): f is File => !!f);
+      const additional = additionalFiles.map((f) => f.file).filter((f): f is File => !!f);
+
+      await Promise.all([
+        uploadSubmissionFiles(submission.id, manuscript, "MANUSCRIPT"),
+        uploadSubmissionFiles(submission.id, cover, "COVER_LETTER"),
+        uploadSubmissionFiles(submission.id, additional, "SUPPORTING"),
+      ]);
+
+      if (saveAsDraft) {
+        toast({ title: "Draft saved. Submit when ready." });
+        navigate(routes.submissionById(submission.id));
+      } else {
+        toast({ title: "Submission submitted successfully." });
+        navigate(routes.submissionById(submission.id));
+      }
+    } catch (err) {
+      const message = err instanceof ApiClientError ? err.message : "Unable to create submission.";
+      toast({ title: "Submission failed", description: message, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  const handleSaveDraft = () => createAndUpload(true);
+  const handleSubmit = () => createAndUpload(false);
 
   return (
     <AuthenticatedLayout
@@ -229,16 +147,16 @@ const SubmissionCreatePage = () => {
           {step === 0 && (
             <div className="space-y-4">
               <div>
-                <Label>Title</Label>
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-xl mt-1" />
+                <Label htmlFor="submission-title">Title</Label>
+                <Input id="submission-title" value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-xl mt-1" />
               </div>
               <div>
-                <Label>Abstract</Label>
-                <Textarea value={abstract} onChange={(e) => setAbstract(e.target.value)} className="rounded-xl mt-1 min-h-32" />
+                <Label htmlFor="submission-abstract">Abstract</Label>
+                <Textarea id="submission-abstract" value={abstract} onChange={(e) => setAbstract(e.target.value)} className="rounded-xl mt-1 min-h-32" />
               </div>
               <div>
-                <Label>Keywords (comma-separated)</Label>
-                <Input value={keywords} onChange={(e) => setKeywords(e.target.value)} className="rounded-xl mt-1" />
+                <Label htmlFor="submission-keywords">Keywords (comma-separated)</Label>
+                <Input id="submission-keywords" value={keywords} onChange={(e) => setKeywords(e.target.value)} className="rounded-xl mt-1" />
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
@@ -362,11 +280,11 @@ const SubmissionCreatePage = () => {
               </Button>
             ) : (
               <>
-                <Button variant="outline" className="rounded-xl" onClick={() => void handleSaveDraft()}>
-                  Save Draft
+                <Button variant="outline" className="rounded-xl" disabled={isSaving} onClick={() => void handleSaveDraft()}>
+                  {isSaving ? "Saving..." : "Save Draft"}
                 </Button>
-                <Button className="rounded-xl" onClick={handleSubmit}>
-                  Submit
+                <Button className="rounded-xl" disabled={isSaving} onClick={() => void handleSubmit()}>
+                  {isSaving ? "Submitting..." : "Submit"}
                 </Button>
               </>
             )}

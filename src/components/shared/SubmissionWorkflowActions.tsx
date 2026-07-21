@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -24,7 +25,6 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
-import { useJournalStore } from "@/lib/store/store";
 import {
   isAssignedHandlingEditor,
   isReadyForFinalEditorialDecision,
@@ -36,7 +36,11 @@ import type { Submission, SubmissionStatus } from "@/lib/store/types";
 import { useToast } from "@/hooks/use-toast";
 import { routes } from "@/app/routes";
 import { FileUpload, type UploadedFileMeta } from "@/components/shared/FileUpload";
-import { buildSubmissionFilesFromUpload, MANUSCRIPT_UPLOAD_ACCEPT, MANUSCRIPT_UPLOAD_HINT } from "@/lib/files/submissionFiles";
+import { MANUSCRIPT_UPLOAD_ACCEPT, MANUSCRIPT_UPLOAD_HINT, inferPublicationFormat } from "@/lib/files/submissionFiles";
+import { workflowApi } from "@/lib/api/workflow";
+import { usersApi } from "@/lib/api/users";
+import { uploadSubmissionFiles, type BackendPublicationFormat } from "@/lib/api/files";
+import { ApiClientError } from "@/lib/api/client";
 
 interface SubmissionWorkflowActionsProps {
   submission: Submission;
@@ -83,19 +87,13 @@ interface PendingConfirmAction {
   onConfirm: () => void | Promise<void>;
 }
 
+const filesToRaw = (files: UploadedFileMeta[]): File[] =>
+  files.map((f) => f.file).filter((f): f is File => !!f);
+
 export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActionsProps) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const users = useJournalStore((s) => s.users);
-  const updateSubmissionStatus = useJournalStore((s) => s.updateSubmissionStatus);
-  const assignHandlingEditor = useJournalStore((s) => s.assignHandlingEditor);
-  const assignReviewer = useJournalStore((s) => s.assignReviewer);
-  const respondToReviewerInvitation = useJournalStore((s) => s.respondToReviewerInvitation);
-  const recordPlagiarismCheck = useJournalStore((s) => s.recordPlagiarismCheck);
-  const submitReview = useJournalStore((s) => s.submitReview);
-  const updateSubmission = useJournalStore((s) => s.updateSubmission);
-  const addActivity = useJournalStore((s) => s.addActivity);
-  const addNotification = useJournalStore((s) => s.addNotification);
+  const queryClient = useQueryClient();
 
   const { can, roles, isAdmin } = usePermissions({
     handlingEditorId: submission.handlingEditorId,
@@ -106,8 +104,45 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     isAssignedReviewer: submission.reviewerId === user?.id,
   });
 
-  const [selectedEditor, setSelectedEditor] = useState(submission.handlingEditorId ?? "");
-  const [selectedReviewer, setSelectedReviewer] = useState(submission.reviewerId ?? "");
+  const isAuthor = submission.authorId === user?.id;
+  const isEic = roles.includes("editor_in_chief");
+  const isHandlingEditorRole = roles.includes("handling_editor");
+  const isMyAssignment = isAssignedHandlingEditor(submission.handlingEditorId, user?.id);
+  const isEicOrAdmin = isEic || isAdmin;
+  const isLayoutEditorRole = roles.includes("layout_editor");
+  const isMyLayoutAssignment =
+    isLayoutEditorRole && (!submission.layoutEditorId || submission.layoutEditorId === user?.id);
+
+  const canAssignEditor = can("editor_assignment", "assign") || isAdmin;
+  const canAssignReviewer = can("reviewer_assignment", "assign") && isMyAssignment;
+
+  const { data: handlingEditors = [] } = useQuery({
+    queryKey: ["users", "candidates", "HANDLING_EDITOR"],
+    queryFn: () => usersApi.candidates("HANDLING_EDITOR"),
+    enabled: canAssignEditor && submission.status === "assigned",
+  });
+  const { data: reviewers = [] } = useQuery({
+    queryKey: ["users", "candidates", "REVIEWER"],
+    queryFn: () => usersApi.candidates("REVIEWER"),
+    enabled: canAssignReviewer && submission.status === "assigned",
+  });
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ["submission", submission.id] });
+    void queryClient.invalidateQueries({ queryKey: ["submissions"] });
+  };
+
+  const mutation = useMutation({
+    mutationFn: (action: () => Promise<Submission>) => action(),
+    onSuccess: () => invalidate(),
+    onError: (err) => {
+      const message = err instanceof ApiClientError ? err.message : "That action failed. Please try again.";
+      toast({ title: "Action failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const [selectedEditor, setSelectedEditor] = useState("");
+  const [selectedReviewer, setSelectedReviewer] = useState("");
   const [plagiarismScore, setPlagiarismScore] = useState(
     submission.similarityScore?.toString() ?? "",
   );
@@ -115,17 +150,13 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
   const [revisionFiles, setRevisionFiles] = useState<UploadedFileMeta[]>([]);
   const [copyeditFiles, setCopyeditFiles] = useState<UploadedFileMeta[]>([]);
   const [copyeditNotes, setCopyeditNotes] = useState("");
+  const [publicationFiles, setPublicationFiles] = useState<UploadedFileMeta[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirmAction | null>(null);
 
   if (!user) return null;
-
-  const act = (status: SubmissionStatus, label: string) => {
-    updateSubmissionStatus(submission.id, status, user.id, user.name, label);
-    toast({ title: "Workflow updated", description: label });
-  };
 
   const openConfirm = (action: PendingConfirmAction) => {
     setPendingConfirm(action);
@@ -154,6 +185,9 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
       setConfirmOpen(false);
       setPendingConfirm(null);
       setConfirmText("");
+    } catch (err) {
+      const message = err instanceof ApiClientError ? err.message : "That action failed. Please try again.";
+      toast({ title: "Action failed", description: message, variant: "destructive" });
     } finally {
       setConfirming(false);
     }
@@ -164,19 +198,6 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     confirmText.trim().toUpperCase() === ACCEPT_CONFIRM_PHRASE;
 
   const decisionLink = (decision: string) => routes.submissionDecision(submission.id, decision);
-
-  const isAuthor = submission.authorId === user.id;
-  const isEic = roles.includes("editor_in_chief");
-  const isHandlingEditorRole = roles.includes("handling_editor");
-  const isMyAssignment = isAssignedHandlingEditor(submission.handlingEditorId, user.id);
-  const isEicOrAdmin = isEic || isAdmin;
-
-  const handlingEditors = users.filter(
-    (u) => u.status === "active" && u.roles.includes("handling_editor"),
-  );
-  const reviewers = users.filter(
-    (u) => u.status === "active" && u.roles.includes("reviewer"),
-  );
 
   const panels: React.ReactNode[] = [];
 
@@ -213,13 +234,11 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               title: "Mark Plagiarism Passed",
               description: "Record that this manuscript passed the similarity check.",
               confirmLabel: "Mark Passed",
-              onConfirm: () => {
+              onConfirm: async () => {
                 const parsed = plagiarismScore.trim() ? Number(plagiarismScore) : undefined;
-                recordPlagiarismCheck(submission.id, user.id, user.name, {
-                  status: "passed",
-                  similarityScore: parsed,
-                  notes: plagiarismNotes,
-                });
+                await mutation.mutateAsync(() =>
+                  workflowApi.recordPlagiarism(submission.id, "PASSED", parsed, plagiarismNotes || undefined),
+                );
                 toast({ title: "Plagiarism check passed" });
               },
             })
@@ -236,12 +255,11 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               description: "This will fail the plagiarism check for this submission.",
               confirmLabel: "Mark Failed",
               destructive: true,
-              onConfirm: () => {
-                recordPlagiarismCheck(submission.id, user.id, user.name, {
-                  status: "failed",
-                  similarityScore: plagiarismScore.trim() ? Number(plagiarismScore) : undefined,
-                  notes: plagiarismNotes,
-                });
+              onConfirm: async () => {
+                const parsed = plagiarismScore.trim() ? Number(plagiarismScore) : undefined;
+                await mutation.mutateAsync(() =>
+                  workflowApi.recordPlagiarism(submission.id, "FAILED", parsed, plagiarismNotes || undefined),
+                );
                 toast({ title: "Plagiarism check failed" });
               },
             })
@@ -271,7 +289,10 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               title: "Approve Screening",
               description: "Approve this submission and move it to editor assignment.",
               confirmLabel: "Approve",
-              onConfirm: () => act("assigned", "Approved administrative screening"),
+              onConfirm: async () => {
+                await mutation.mutateAsync(() => workflowApi.screen(submission.id, "APPROVE"));
+                toast({ title: "Screening approved" });
+              },
             })
           }
         >
@@ -288,7 +309,7 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
   }
 
   // ── EIC / Admin: Assign Handling Editor ──
-  if ((can("editor_assignment", "assign") || isAdmin) && submission.status === "assigned") {
+  if (canAssignEditor && submission.status === "assigned" && !submission.handlingEditorId) {
     panels.push(
       <ActionPanel key="assign-editor" title="Editor Assignment — Assign Handling Editor">
         <Select value={selectedEditor} onValueChange={setSelectedEditor}>
@@ -311,8 +332,8 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               title: "Assign Handling Editor",
               description: `Assign ${handlingEditors.find((u) => u.id === selectedEditor)?.name ?? "the selected editor"} as handling editor for this submission.`,
               confirmLabel: "Assign Editor",
-              onConfirm: () => {
-                assignHandlingEditor(submission.id, selectedEditor, user.id, user.name);
+              onConfirm: async () => {
+                await mutation.mutateAsync(() => workflowApi.assignEditor(submission.id, selectedEditor));
                 toast({ title: "Handling editor assigned" });
               },
             })
@@ -320,22 +341,6 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
         >
           Assign Editor
         </Button>
-        {submission.handlingEditorId && (
-          <Button
-            variant="outline"
-            className="rounded-xl bg-white"
-            onClick={() =>
-              openConfirm({
-                title: "Send to Peer Review",
-                description: "Send this manuscript to peer review.",
-                confirmLabel: "Send to Peer Review",
-                onConfirm: () => act("under_review", "Sent to peer review"),
-              })
-            }
-          >
-            Send to Peer Review
-          </Button>
-        )}
       </ActionPanel>,
     );
   }
@@ -355,8 +360,8 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               title: "Accept Assignment",
               description: "You will become the handling editor for this submission.",
               confirmLabel: "Accept Assignment",
-              onConfirm: () => {
-                assignHandlingEditor(submission.id, user.id, user.id, user.name);
+              onConfirm: async () => {
+                await mutation.mutateAsync(() => workflowApi.assignEditor(submission.id, user.id));
                 toast({ title: "You are now the handling editor for this submission" });
               },
             })
@@ -368,28 +373,8 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     );
   }
 
-  // ── Handling Editor: Start review when assigned to them ──
-  if (can("reviewer_assignment", "assign") && isMyAssignment && submission.status === "assigned") {
-    panels.push(
-      <ActionPanel key="he-start" title="Handling Editor — Begin Editorial Process">
-        <Button
-          className="rounded-xl"
-          onClick={() =>
-            openConfirm({
-              title: "Start Peer Review",
-              description: "Begin the editorial and peer review process for this submission.",
-              confirmLabel: "Start Peer Review",
-              onConfirm: () => act("under_review", "Editorial review started"),
-            })
-          }
-        >
-          Start Peer Review
-        </Button>
-      </ActionPanel>,
-    );
-  }
-
-  if (can("reviewer_assignment", "assign") && isMyAssignment && submission.status === "under_review") {
+  // ── Handling Editor: Invite reviewer (submission stays "assigned" until the reviewer accepts) ──
+  if (canAssignReviewer && submission.status === "assigned") {
     panels.push(
       <ActionPanel key="assign-reviewer" title="Reviewer Assignment — Invite Reviewer">
         <Select value={selectedReviewer} onValueChange={setSelectedReviewer}>
@@ -412,8 +397,8 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               title: "Invite Reviewer",
               description: `Send a review invitation to ${reviewers.find((u) => u.id === selectedReviewer)?.name ?? "the selected reviewer"}.`,
               confirmLabel: "Invite Reviewer",
-              onConfirm: () => {
-                assignReviewer(submission.id, selectedReviewer, user.id, user.name);
+              onConfirm: async () => {
+                await mutation.mutateAsync(() => workflowApi.inviteReviewer(submission.id, selectedReviewer));
                 toast({ title: "Reviewer invited" });
               },
             })
@@ -439,8 +424,8 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               title: "Accept Review Invitation",
               description: "You will be assigned to review this manuscript.",
               confirmLabel: "Accept Invitation",
-              onConfirm: () => {
-                respondToReviewerInvitation(submission.id, user.id, true);
+              onConfirm: async () => {
+                await mutation.mutateAsync(() => workflowApi.respondToInvitation(submission.id, true));
                 toast({ title: "Review invitation accepted" });
               },
             })
@@ -456,8 +441,8 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               title: "Decline Review Invitation",
               description: "You will decline this review invitation.",
               confirmLabel: "Decline Invitation",
-              onConfirm: () => {
-                respondToReviewerInvitation(submission.id, user.id, false);
+              onConfirm: async () => {
+                await mutation.mutateAsync(() => workflowApi.respondToInvitation(submission.id, false));
                 toast({ title: "Review invitation declined" });
               },
             })
@@ -504,8 +489,8 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
                   description: "You are recommending acceptance of this manuscript.",
                   confirmLabel: "Submit Accept Review",
                   requireAcceptPhrase: true,
-                  onConfirm: () => {
-                    submitReview(submission.id, rec.value, user.id, user.name);
+                  onConfirm: async () => {
+                    await mutation.mutateAsync(() => workflowApi.submitReview(submission.id, "ACCEPT"));
                     toast({ title: "Review submitted", description: rec.label });
                   },
                 })
@@ -542,7 +527,10 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               description: "This manuscript will be marked as accepted for publication.",
               confirmLabel: "Confirm Acceptance",
               requireAcceptPhrase: true,
-              onConfirm: () => act("accepted", "Accepted for publication"),
+              onConfirm: async () => {
+                await mutation.mutateAsync(() => workflowApi.decide(submission.id, "ACCEPT"));
+                toast({ title: "Accepted for publication" });
+              },
             })
           }
         >
@@ -618,21 +606,8 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
   if (isMyAssignment && isHandlingEditorRole && submission.status === "revision_required") {
     panels.push(
       <ActionPanel key="he-revision" title="Handling Editor — Review Author Revision">
-        <Button
-          className="rounded-xl"
-          onClick={() =>
-            openConfirm({
-              title: "Accept Author Revision",
-              description: "Accept the author's revision and return this submission to review.",
-              confirmLabel: "Accept Revision",
-              onConfirm: () => act("under_review", "Revision accepted, back to review"),
-            })
-          }
-        >
-          Accept Revision
-        </Button>
         <Button asChild variant="outline" className="rounded-xl bg-white">
-          <Link to={decisionLink("further-revision")}>Request Further Revision</Link>
+          <Link to={decisionLink("further-revision")}>Send Back to Review</Link>
         </Button>
         <Button asChild variant="destructive" className="rounded-xl">
           <Link to={decisionLink("reject-after-revision")}>Reject</Link>
@@ -641,10 +616,10 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     );
   }
 
-  // ── Author: Submit revision with files ──
+  // ── Author: Upload revision (handling editor reviews it next, above) ──
   if (isAuthor && can("revision", "create") && submission.status === "revision_required") {
     panels.push(
-      <ActionPanel key="revision" title="Author — Submit Revision">
+      <ActionPanel key="revision" title="Author — Upload Revised Manuscript">
         <div className="w-full">
           <FileUpload
             label="Upload revised manuscript"
@@ -660,25 +635,20 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
           disabled={revisionFiles.length === 0}
           onClick={() =>
             openConfirm({
-              title: "Submit Revision",
-              description: "Upload your revised manuscript and return it to editorial review.",
-              confirmLabel: "Submit Revision",
+              title: "Upload Revision",
+              description: "Upload your revised manuscript. Your handling editor will review it next.",
+              confirmLabel: "Upload Revision",
               onConfirm: async () => {
-                const uploaded = await buildSubmissionFilesFromUpload(
-                  revisionFiles,
-                  "revision",
-                  `file-rev-${submission.id}`,
+                await mutation.mutateAsync(() =>
+                  uploadSubmissionFiles(submission.id, filesToRaw(revisionFiles), "REVISION").then(() => submission),
                 );
-                updateSubmission(submission.id, {
-                  files: [...submission.files.filter((f) => f.type !== "revision"), ...uploaded],
-                });
-                act("under_review", "Revision submitted by author");
+                toast({ title: "Revision uploaded", description: "Your handling editor has been notified to review it." });
                 setRevisionFiles([]);
               },
             })
           }
         >
-          Submit Revision
+          Upload Revision
         </Button>
       </ActionPanel>,
     );
@@ -695,7 +665,10 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               title: "Start Copyediting",
               description: "Begin language review for this accepted manuscript.",
               confirmLabel: "Start Copyediting",
-              onConfirm: () => act("copyediting", "Copyediting started"),
+              onConfirm: async () => {
+                await mutation.mutateAsync(() => workflowApi.startCopyediting(submission.id));
+                toast({ title: "Copyediting started" });
+              },
             })
           }
         >
@@ -743,25 +716,9 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               description: `Upload the copyedited file "${copyeditFiles[0]?.name ?? "manuscript"}" and send this submission to the layout team.`,
               confirmLabel: "Send to Production",
               onConfirm: async () => {
-                const uploaded = await buildSubmissionFilesFromUpload(
-                  copyeditFiles,
-                  "copyedit",
-                  `file-copyedit-${submission.id}`,
-                );
-                const now = new Date().toISOString();
-                const trimmedNotes = copyeditNotes.trim();
-                updateSubmission(submission.id, {
-                  files: [...submission.files.filter((f) => f.type !== "copyedit"), ...uploaded],
-                  copyeditorId: user.id,
-                  copyeditedAt: now,
-                  copyeditNotes: trimmedNotes || undefined,
-                });
-                act(
-                  "production",
-                  trimmedNotes
-                    ? `Copyedited manuscript uploaded. Notes: ${trimmedNotes}`
-                    : "Copyedited manuscript uploaded and sent to production",
-                );
+                await uploadSubmissionFiles(submission.id, filesToRaw(copyeditFiles), "COPYEDIT");
+                await mutation.mutateAsync(() => workflowApi.sendToProduction(submission.id, copyeditNotes.trim() || undefined));
+                toast({ title: "Sent to production" });
                 setCopyeditFiles([]);
                 setCopyeditNotes("");
               },
@@ -774,7 +731,91 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     );
   }
 
-  // Layout editor workflow is handled in LayoutEditorWorkspace on the submission detail page.
+  // ── Layout Editor: start layout, upload publication files, send for proof ──
+  if (isMyLayoutAssignment && submission.status === "production" && !submission.proofReady) {
+    const hasPublicationFile = submission.files.some((f) => f.type === "publication");
+    panels.push(
+      <ActionPanel key="layout" title="Layout & Production">
+        {!submission.layoutStartedAt && (
+          <Button
+            className="rounded-xl"
+            onClick={() =>
+              openConfirm({
+                title: "Start Layout",
+                description: "Begin layout and typesetting for this manuscript.",
+                confirmLabel: "Start Layout",
+                onConfirm: async () => {
+                  await mutation.mutateAsync(() => workflowApi.startLayout(submission.id));
+                  toast({ title: "Layout started" });
+                },
+              })
+            }
+          >
+            Start Layout
+          </Button>
+        )}
+        {submission.layoutStartedAt && (
+          <>
+            <div className="w-full">
+              <FileUpload
+                label="Upload publication-ready file"
+                description="PDF, HTML, XML, ePub, or DOCX — each upload creates a new version"
+                files={publicationFiles}
+                onChange={setPublicationFiles}
+                maxFiles={5}
+              />
+            </div>
+            <Button
+              variant="outline"
+              className="rounded-xl bg-white"
+              disabled={publicationFiles.length === 0}
+              onClick={() =>
+                openConfirm({
+                  title: "Upload Publication File",
+                  description: "Upload the publication-ready file(s) for this manuscript.",
+                  confirmLabel: "Upload",
+                  onConfirm: async () => {
+                    for (const meta of publicationFiles) {
+                      if (!meta.file) continue;
+                      const format = inferPublicationFormat(meta.name).toUpperCase() as BackendPublicationFormat;
+                      await uploadSubmissionFiles(submission.id, [meta.file], "PUBLICATION", { format });
+                    }
+                    invalidate();
+                    toast({ title: "Publication file(s) uploaded" });
+                    setPublicationFiles([]);
+                  },
+                })
+              }
+            >
+              Upload File
+            </Button>
+            <Button
+              className="rounded-xl"
+              disabled={!hasPublicationFile}
+              onClick={() =>
+                openConfirm({
+                  title: "Send for Author Proof",
+                  description: "Send this layout to the author for proofreading approval.",
+                  confirmLabel: "Send for Proof",
+                  onConfirm: async () => {
+                    await mutation.mutateAsync(() => workflowApi.sendForProof(submission.id));
+                    toast({ title: "Sent for author proof" });
+                  },
+                })
+              }
+            >
+              Send for Proof
+            </Button>
+            {!hasPublicationFile && (
+              <p className="w-full text-xs text-amber-700">
+                Upload at least one publication-ready file before sending for proof.
+              </p>
+            )}
+          </>
+        )}
+      </ActionPanel>,
+    );
+  }
 
   // ── Author: Proofreading ──
   if (
@@ -793,45 +834,9 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               title: "Approve Proof",
               description: "Approve the layout proof. The publisher will be notified to finalize publication.",
               confirmLabel: "Approve Proof",
-              onConfirm: () => {
-                const now = new Date().toISOString();
-                updateSubmission(submission.id, { proofApproved: true });
-                addActivity({
-                  submissionId: submission.id,
-                  action: "Author approved proof",
-                  actorId: user.id,
-                  actorName: user.name,
-                  actorRoles: user.roles,
-                  statusAfter: "production",
-                  timestamp: now,
-                  details: "Manuscript proof approved for publication",
-                });
-                users
-                  .filter((u) => u.status === "active" && u.roles.includes("publisher_admin"))
-                  .forEach((admin) => {
-                    addNotification({
-                      userId: admin.id,
-                      title: "Proof Approved",
-                      message: `${submission.submissionNumber} is ready to publish.`,
-                      read: false,
-                      createdAt: now,
-                      link: routes.submissionById(submission.id),
-                    });
-                  });
-                if (submission.handlingEditorId) {
-                  addNotification({
-                    userId: submission.handlingEditorId,
-                    title: "Proof Approved",
-                    message: `${submission.submissionNumber} layout proof was approved by the author.`,
-                    read: false,
-                    createdAt: now,
-                    link: routes.submissionById(submission.id),
-                  });
-                }
-                toast({
-                  title: "Proof approved",
-                  description: "The publisher will finalize publication.",
-                });
+              onConfirm: async () => {
+                await mutation.mutateAsync(() => workflowApi.respondToProof(submission.id, true));
+                toast({ title: "Proof approved", description: "The publisher will finalize publication." });
               },
             })
           }
@@ -846,29 +851,8 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               title: "Request Correction",
               description: "Send the proof back to the layout editor for corrections.",
               confirmLabel: "Request Correction",
-              onConfirm: () => {
-                const now = new Date().toISOString();
-                updateSubmission(submission.id, { proofReady: false, proofApproved: false });
-                addActivity({
-                  submissionId: submission.id,
-                  action: "Author requested layout correction",
-                  actorId: user.id,
-                  actorName: user.name,
-                  actorRoles: user.roles,
-                  statusAfter: "production",
-                  timestamp: now,
-                  details: "Proof sent back to layout editor for corrections",
-                });
-                if (submission.layoutEditorId) {
-                  addNotification({
-                    userId: submission.layoutEditorId,
-                    title: "Layout Correction Requested",
-                    message: `${submission.submissionNumber} requires layout corrections after author proof review.`,
-                    read: false,
-                    createdAt: now,
-                    link: routes.submissionById(submission.id),
-                  });
-                }
+              onConfirm: async () => {
+                await mutation.mutateAsync(() => workflowApi.respondToProof(submission.id, false));
                 toast({ title: "Correction request sent to layout editor" });
               },
             })
@@ -922,32 +906,14 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               title: "Publish Article",
               description: "Publish this article and make it publicly available.",
               confirmLabel: "Publish",
-              onConfirm: () => act("published", "Article published"),
+              onConfirm: async () => {
+                await mutation.mutateAsync(() => workflowApi.publish(submission.id));
+                toast({ title: "Article published" });
+              },
             })
           }
         >
           Publish
-        </Button>
-      </ActionPanel>,
-    );
-  }
-
-  if ((can("publication", "publish") || isAdmin) && submission.status === "accepted") {
-    panels.push(
-      <ActionPanel key="publish-fast" title="Publisher / Admin — Fast Track Publish">
-        <Button
-          variant="outline"
-          className="rounded-xl bg-white"
-          onClick={() =>
-            openConfirm({
-              title: "Fast Track Publish",
-              description: "Publish this accepted article immediately, skipping remaining production steps.",
-              confirmLabel: "Publish Now",
-              onConfirm: () => act("published", "Article published (fast track)"),
-            })
-          }
-        >
-          Publish Now
         </Button>
       </ActionPanel>,
     );
@@ -974,7 +940,7 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
               : isHandlingEditorRole && submission.handlingEditorId && !isMyAssignment
                 ? "This submission is assigned to another handling editor."
                 : isEic && submission.status === "assigned"
-                  ? "Assign a handling editor, then send the manuscript to peer review before a final decision."
+                  ? "Assign a handling editor, then invite a reviewer."
                   : "No actions available for your role at this stage. Another team member may need to act next."}
           </p>
         </CardContent>
