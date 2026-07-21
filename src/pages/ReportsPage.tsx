@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { BarChart3, FileText, Users } from "lucide-react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/features/auth/useAuth";
+import { submissionsApi } from "@/lib/api/submissions";
 import { useJournalStore } from "@/lib/store/store";
 import { countByStatus, filterSubmissionsForReports } from "@/lib/store/submissionFilters";
 import { ALL_STATUSES, getStatusLabel } from "@/lib/status/config";
@@ -18,7 +20,15 @@ import { routes } from "@/app/routes";
 
 export default function ReportsPage() {
   const { user } = useAuth();
-  const submissions = useJournalStore((s) => s.submissions);
+
+  const { data: submissions = [] } = useQuery({
+    queryKey: ["submissions"],
+    queryFn: () => submissionsApi.list(),
+    enabled: !!user,
+  });
+
+  // Real GET /api/users exists but user management (UsersPage) isn't wired
+  // yet as a whole — this stat stays on the mock store until that lands.
   const users = useJournalStore((s) => s.users);
 
   const scopedSubmissions = useMemo(() => {
