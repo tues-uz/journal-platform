@@ -6,6 +6,7 @@ export interface AuthUser {
   email: string;
   roles: Role[];
   avatarUrl?: string;
+  institution?: string;
 }
 
 const SESSION_KEY = "journal-auth-session";

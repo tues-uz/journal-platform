@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   FileText,
@@ -17,7 +18,9 @@ import { SubmissionPositionChip } from "@/components/shared/SubmissionPositionCh
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import { useAuthorSubmissionAccess } from "@/lib/payment/useAuthorSubmissionAccess";
-import { useJournalStore } from "@/lib/store/store";
+import { submissionsApi } from "@/lib/api/submissions";
+import { notificationsApi } from "@/lib/api/notifications";
+import { buildUserDirectory } from "@/lib/api/userDirectory";
 import { routes } from "@/app/routes";
 import { canAccessNavPath } from "@/lib/rbac/navItems";
 import { getLayoutStats, filterSubmissionsForProduction } from "@/lib/store/submissionFilters";
@@ -62,9 +65,19 @@ const DashboardPage = () => {
   const { user } = useAuth();
   const { can, roles } = usePermissions();
   const { canCreateSubmission, needsPayment } = useAuthorSubmissionAccess();
-  const submissions = useJournalStore((s) => s.submissions);
-  const notifications = useJournalStore((s) => s.notifications);
-  const getUserById = useJournalStore((s) => s.getUserById);
+
+  const { data: submissions = [] } = useQuery({
+    queryKey: ["submissions"],
+    queryFn: () => submissionsApi.list(),
+    enabled: !!user,
+  });
+
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => notificationsApi.list(),
+    enabled: !!user,
+  });
+  const getUserById = useMemo(() => buildUserDirectory(submissions), [submissions]);
 
   const relevantSubmissions = useMemo(() => {
     if (!user) return [];
@@ -72,8 +85,8 @@ const DashboardPage = () => {
   }, [submissions, user]);
 
   const unreadNotifications = useMemo(
-    () => notifications.filter((n) => n.userId === user?.id && !n.read),
-    [notifications, user?.id],
+    () => notifications.filter((n) => !n.read),
+    [notifications],
   );
 
   const pendingReviews = relevantSubmissions.filter((s) => s.status === "under_review").length;

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Banknote, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { FileUpload, type UploadedFileMeta } from "@/components/shared/FileUpload";
@@ -12,9 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
-import { formatPaymentAmount, getLatestPaymentForAuthor } from "@/lib/payment/access";
-import { buildPaymentProofFile } from "@/lib/payment/files";
-import { useJournalStore } from "@/lib/store/store";
+import { formatPaymentAmount } from "@/lib/payment/access";
+import { paymentsApi } from "@/lib/api/payments";
+import { ApiClientError } from "@/lib/api/client";
 import { routes } from "@/app/routes";
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,61 +23,66 @@ const AuthorPaymentPage = () => {
   const { user } = useAuth();
   const { can } = usePermissions();
   const { toast } = useToast();
-  const paymentSettings = useJournalStore((s) => s.paymentSettings);
-  const payments = useJournalStore((s) => s.payments);
-  const getUserById = useJournalStore((s) => s.getUserById);
-  const submitPaymentRequest = useJournalStore((s) => s.submitPaymentRequest);
+  const queryClient = useQueryClient();
+
+  const { data: paymentSettings } = useQuery({
+    queryKey: ["payment-settings"],
+    queryFn: () => paymentsApi.getSettings(),
+    enabled: !!user,
+  });
+
+  const { data: allPayments = [] } = useQuery({
+    queryKey: ["payments", "all"],
+    queryFn: () => paymentsApi.listAll(),
+    enabled: !!user,
+  });
 
   const [proofFiles, setProofFiles] = useState<UploadedFileMeta[]>([]);
   const [referenceNote, setReferenceNote] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
-  if (!can("author_payment", "view")) {
-    return <Navigate to={routes.dashboard} replace />;
-  }
-
-  const latestPayment = useMemo(
-    () => (user ? getLatestPaymentForAuthor(user.id, payments) : undefined),
-    [user, payments],
-  );
+  const submitMutation = useMutation({
+    mutationFn: ({ file, note }: { file: File; note?: string }) => paymentsApi.submitProof(file, note),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["payments"] });
+      toast({ title: "Payment proof submitted.", description: "An admin will review it shortly." });
+      setProofFiles([]);
+      setReferenceNote("");
+    },
+    onError: (err) => {
+      const message = err instanceof ApiClientError ? err.message : "Unable to submit payment.";
+      toast({ title: "Submit failed", description: message, variant: "destructive" });
+    },
+  });
 
   const authorPayments = useMemo(
     () =>
       user
-        ? payments
+        ? allPayments
             .filter((payment) => payment.authorId === user.id)
             .sort(
               (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
             )
         : [],
-    [user, payments],
+    [user, allPayments],
   );
+
+  if (!can("author_payment", "view")) {
+    return <Navigate to={routes.dashboard} replace />;
+  }
+
+  const latestPayment = authorPayments[0];
 
   const canSubmit =
     can("author_payment", "create") &&
     (!latestPayment ||
       latestPayment.status === "rejected");
 
-  const handleSubmit = async () => {
-    if (!user || proofFiles.length === 0 || !proofFiles[0].file) {
+  const handleSubmit = () => {
+    if (proofFiles.length === 0 || !proofFiles[0].file) {
       toast({ title: "Please upload your transfer proof.", variant: "destructive" });
       return;
     }
-
-    setSubmitting(true);
-    try {
-      const proofFile = await buildPaymentProofFile(proofFiles[0], `pay-${Date.now()}`);
-      const result = submitPaymentRequest(user.id, proofFile, referenceNote);
-      if (!result.success) {
-        toast({ title: result.error ?? "Unable to submit payment.", variant: "destructive" });
-        return;
-      }
-      toast({ title: "Payment proof submitted.", description: "An admin will review it shortly." });
-      setProofFiles([]);
-      setReferenceNote("");
-    } finally {
-      setSubmitting(false);
-    }
+    submitMutation.mutate({ file: proofFiles[0].file, note: referenceNote.trim() || undefined });
   };
 
   return (
@@ -87,7 +93,7 @@ const AuthorPaymentPage = () => {
         { label: "Submission Fee" },
       ]}
     >
-      {!paymentSettings.enabled && (
+      {paymentSettings && !paymentSettings.enabled && (
         <Card className="rounded-xl shadow-sm mb-6 border-green-200 bg-green-50/50">
           <CardContent className="p-6">
             <p className="text-sm text-green-800">
@@ -146,7 +152,7 @@ const AuthorPaymentPage = () => {
                 <span className="font-medium">Reference:</span> {latestPayment.referenceNote}
               </p>
             )}
-            <PaymentProofPreview file={latestPayment.proofFile} />
+            <PaymentProofPreview paymentId={latestPayment.id} />
           </CardContent>
         </Card>
       )}
@@ -173,7 +179,7 @@ const AuthorPaymentPage = () => {
         </Card>
       )}
 
-      {canSubmit && paymentSettings.enabled && (
+      {canSubmit && paymentSettings && paymentSettings.enabled && (
         <>
           <Card className="rounded-xl shadow-sm mb-6">
             <CardHeader>
@@ -253,9 +259,9 @@ const AuthorPaymentPage = () => {
               <Button
                 className="rounded-xl"
                 onClick={handleSubmit}
-                disabled={submitting || proofFiles.length === 0}
+                disabled={submitMutation.isPending || proofFiles.length === 0}
               >
-                {submitting ? "Submitting..." : "Submit Payment Proof"}
+                {submitMutation.isPending ? "Submitting..." : "Submit Payment Proof"}
               </Button>
             </CardContent>
           </Card>
@@ -270,7 +276,6 @@ const AuthorPaymentPage = () => {
         <CardContent className="p-0 pb-2">
           <PaymentListTable
             payments={authorPayments}
-            getUserById={getUserById}
             showAuthor={false}
             showReviewAction={false}
             emptyMessage="No payment records yet. Submit a transfer proof above to get started."

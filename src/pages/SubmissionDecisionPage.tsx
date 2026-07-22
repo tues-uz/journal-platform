@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { FileUpload, type UploadedFileMeta } from "@/components/shared/FileUpload";
@@ -23,24 +24,63 @@ import { useToast } from "@/hooks/use-toast";
 import { routes } from "@/app/routes";
 import { canPerformDecision, buildSubmissionScope } from "@/lib/rbac/submissionAccess";
 import { usePermissions } from "@/lib/rbac/usePermissions";
-import { useJournalStore } from "@/lib/store/store";
-import { buildFeedbackFiles } from "@/lib/workflow/feedbackFiles";
-import { DECISION_CONFIG, isDecisionSlug } from "@/lib/workflow/submissionActions";
+import { submissionsApi } from "@/lib/api/submissions";
+import { workflowApi, type DecisionSlug, type RecommendationValue, type ScreeningDecision } from "@/lib/api/workflow";
+import { uploadSubmissionFiles } from "@/lib/api/files";
+import { ApiClientError } from "@/lib/api/client";
+import { DECISION_CONFIG, isDecisionSlug, type DecisionSlug as UiDecisionSlug } from "@/lib/workflow/submissionActions";
 
 const CONFIRM_PHRASES = {
   reject: "REJECT",
   revision: "REVISE",
 } as const;
 
+/** Maps the UI's decision-page slug to the real backend call. */
+function submitDecision(id: string, slug: UiDecisionSlug, reason: string): Promise<unknown> {
+  switch (slug) {
+    case "screening-revision":
+      return workflowApi.screen(id, "REQUEST_REVISION" as ScreeningDecision, reason);
+    case "desk-reject":
+      return workflowApi.screen(id, "DESK_REJECT" as ScreeningDecision, reason);
+    case "minor-revision":
+      return workflowApi.decide(id, "MINOR_REVISION" as DecisionSlug, reason);
+    case "major-revision":
+      return workflowApi.decide(id, "MAJOR_REVISION" as DecisionSlug, reason);
+    case "reject":
+      return workflowApi.decide(id, "REJECT" as DecisionSlug, reason);
+    case "further-revision":
+      return workflowApi.decide(id, "FURTHER_REVISION" as DecisionSlug, reason);
+    case "reject-after-revision":
+      return workflowApi.decide(id, "REJECT_AFTER_REVISION" as DecisionSlug, reason);
+    case "review-minor-revision":
+      return workflowApi.submitReview(id, "MINOR_REVISION" as RecommendationValue, reason);
+    case "review-major-revision":
+      return workflowApi.submitReview(id, "MAJOR_REVISION" as RecommendationValue, reason);
+    case "review-reject":
+      return workflowApi.submitReview(id, "REJECT" as RecommendationValue, reason);
+    case "recommend-minor-revision":
+      return workflowApi.submitRecommendation(id, "MINOR_REVISION" as RecommendationValue, reason);
+    case "recommend-major-revision":
+      return workflowApi.submitRecommendation(id, "MAJOR_REVISION" as RecommendationValue, reason);
+    case "recommend-reject":
+      return workflowApi.submitRecommendation(id, "REJECT" as RecommendationValue, reason);
+    case "recommend-accept":
+      return workflowApi.submitRecommendation(id, "ACCEPT" as RecommendationValue, reason);
+  }
+}
+
 const SubmissionDecisionPage = () => {
   const { id, decision } = useParams<{ id: string; decision: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const submissions = useJournalStore((s) => s.submissions);
-  const updateSubmissionStatus = useJournalStore((s) => s.updateSubmissionStatus);
-  const submitReview = useJournalStore((s) => s.submitReview);
-  const submitEditorRecommendation = useJournalStore((s) => s.submitEditorRecommendation);
+  const queryClient = useQueryClient();
+
+  const { data: submission } = useQuery({
+    queryKey: ["submission", id],
+    queryFn: () => submissionsApi.get(id as string),
+    enabled: !!id && !!user,
+  });
 
   const [reason, setReason] = useState("");
   const [images, setImages] = useState<UploadedFileMeta[]>([]);
@@ -48,7 +88,6 @@ const SubmissionDecisionPage = () => {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
 
-  const submission = submissions.find((s) => s.id === id);
   const validDecision = decision && isDecisionSlug(decision) ? decision : null;
   const config = validDecision ? DECISION_CONFIG[validDecision] : null;
 
@@ -90,39 +129,16 @@ const SubmissionDecisionPage = () => {
 
     setSubmitting(true);
     try {
-      const feedbackFiles = await buildFeedbackFiles(
-        images,
-        config.mode === "status" || config.mode === "recommendation" ? "decision" : "review",
-      );
-
-      if (config.mode === "status") {
-        updateSubmissionStatus(
-          submission.id,
-          config.status,
-          user.id,
-          user.name,
-          config.activityLabel,
-          reason.trim(),
-          feedbackFiles,
-        );
-      } else if (config.mode === "recommendation") {
-        submitEditorRecommendation(
-          submission.id,
-          config.recommendation,
-          user.id,
-          user.name,
-          reason.trim(),
-        );
-      } else {
-        submitReview(
-          submission.id,
-          config.recommendation,
-          user.id,
-          user.name,
-          reason.trim(),
-          feedbackFiles,
-        );
+      const imageFiles = images.map((f) => f.file).filter((f): f is File => !!f);
+      if (imageFiles.length > 0) {
+        const feedbackKind = config.mode === "review" ? "REVIEW" : "DECISION";
+        await uploadSubmissionFiles(submission.id, imageFiles, "DECISION_FEEDBACK", { feedbackKind });
       }
+
+      await submitDecision(submission.id, validDecision, reason.trim());
+
+      void queryClient.invalidateQueries({ queryKey: ["submission", submission.id] });
+      void queryClient.invalidateQueries({ queryKey: ["submissions"] });
 
       toast({
         title:
@@ -134,6 +150,9 @@ const SubmissionDecisionPage = () => {
         description: config.activityLabel,
       });
       navigate(routes.submissionById(submission.id));
+    } catch (err) {
+      const message = err instanceof ApiClientError ? err.message : "That action failed. Please try again.";
+      toast({ title: "Submission failed", description: message, variant: "destructive" });
     } finally {
       setSubmitting(false);
     }

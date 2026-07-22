@@ -124,9 +124,12 @@ export interface Submission {
   articleType: string;
   status: SubmissionStatus;
   authorId: string;
+  authorName?: string;
   authors: SubmissionAuthor[];
   handlingEditorId?: string;
+  handlingEditorName?: string;
   reviewerId?: string;
+  reviewerName?: string;
   pendingReviewerId?: string;
   reviewerInvitationStatus?: ReviewerInvitationStatus;
   proofReady?: boolean;
@@ -138,9 +141,11 @@ export interface Submission {
   editorRecommendationNotes?: string;
   editorRecommendationAt?: string;
   copyeditorId?: string;
+  copyeditorName?: string;
   copyeditedAt?: string;
   copyeditNotes?: string;
   layoutEditorId?: string;
+  layoutEditorName?: string;
   layoutAssignedAt?: string;
   layoutStartedAt?: string;
   layoutDueDate?: string;
@@ -194,7 +199,9 @@ export interface JournalSettings {
 
 export interface Notification {
   id: string;
-  userId: string;
+  // Optional: the real API scopes /api/notifications to the caller already,
+  // so this is only populated by the mock store.
+  userId?: string;
   title: string;
   message: string;
   read: boolean;

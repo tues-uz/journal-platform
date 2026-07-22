@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Bell, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import {
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/features/auth/useAuth";
-import { useJournalStore } from "@/lib/store/store";
+import { notificationsApi } from "@/lib/api/notifications";
 import { ROLE_LABELS } from "@/lib/rbac/types";
 import { routes } from "@/app/routes";
 
@@ -25,9 +26,12 @@ interface AppTopbarProps {
 
 export function AppTopbar({ title }: AppTopbarProps) {
   const { user, logout } = useAuth();
-  const unreadCount = useJournalStore((s) =>
-    user ? s.getUnreadCount(user.id) : 0,
-  );
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => notificationsApi.list(),
+    enabled: !!user,
+  });
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-gray-200 h-16 flex items-center px-6 gap-4">

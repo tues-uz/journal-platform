@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, BookOpen, User, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,9 @@ import {
   hasRegistrationErrors,
   validateAuthorRegistration,
 } from "@/features/auth/registerAuthor";
-import { useJournalStore } from "@/lib/store/store";
+import { authApi } from "@/lib/api/auth";
+import { ApiClientError } from "@/lib/api/client";
+import { paymentsApi } from "@/lib/api/payments";
 
 const JournalRegister = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -36,8 +39,7 @@ const JournalRegister = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { login, isAuthenticated } = useAuth();
-  const registerAuthor = useJournalStore((s) => s.registerAuthor);
-  const paymentSettings = useJournalStore((s) => s.paymentSettings);
+  const queryClient = useQueryClient();
   const redirectFeedback = getRedirectFeedback(redirectStatus);
 
   useEffect(() => {
@@ -65,7 +67,7 @@ const JournalRegister = () => {
     return <Navigate to={routes.dashboard} replace />;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -86,46 +88,37 @@ const JournalRegister = () => {
     setRedirectStatus("idle");
     setDisplayProgress(getRedirectFeedback("idle").progress);
 
-    setTimeout(() => {
-      const result = registerAuthor({
+    try {
+      const { tokens, user } = await authApi.register({
         name,
         email,
         password,
-        institution,
+        institution: institution || undefined,
       });
 
-      if (!result.success || !result.user) {
-        setError(result.error ?? "Unable to create account.");
-        setIsLoading(false);
-        toast({
-          title: "Registration failed",
-          description: result.error ?? "Unable to create account.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      login({
-        id: result.user.id,
-        name: result.user.name,
-        email: result.user.email,
-        roles: result.user.roles,
-        avatarUrl: result.user.avatarUrl,
-      });
+      login(tokens, user);
 
       toast({
         title: "Account created",
         description: "Welcome! Complete your submission fee to start submitting manuscripts.",
       });
 
+      const paymentSettings = await queryClient
+        .fetchQuery({
+          queryKey: ["payment-settings"],
+          queryFn: () => paymentsApi.getSettings(),
+        })
+        .catch(() => null);
+
       setTimeout(() => {
         void runPostSignInRedirect(
           prefetchRoute,
           navigate,
-          paymentSettings.enabled ? routes.payment : routes.dashboard,
+          paymentSettings?.enabled ? routes.payment : routes.dashboard,
           (status) => {
-          setRedirectStatus(status);
-        }).catch(() => {
+            setRedirectStatus(status);
+          },
+        ).catch(() => {
           setIsLoading(false);
           setRedirectStatus("idle");
           toast({
@@ -134,8 +127,17 @@ const JournalRegister = () => {
             variant: "destructive",
           });
         });
-      }, 500);
-    }, 400);
+      }, 300);
+    } catch (err) {
+      const message = err instanceof ApiClientError ? err.message : "Unable to create account.";
+      setError(message);
+      setIsLoading(false);
+      toast({
+        title: "Registration failed",
+        description: message,
+        variant: "destructive",
+      });
+    }
   };
 
   return (

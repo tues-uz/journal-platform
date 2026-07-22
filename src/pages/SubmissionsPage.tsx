@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, FileText } from "lucide-react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,8 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import { useAuthorSubmissionAccess } from "@/lib/payment/useAuthorSubmissionAccess";
-import { useJournalStore } from "@/lib/store/store";
+import { submissionsApi } from "@/lib/api/submissions";
+import { buildUserDirectory } from "@/lib/api/userDirectory";
 import { ALL_STATUSES } from "@/lib/status/config";
 import { routes } from "@/app/routes";
 
@@ -34,20 +36,20 @@ const SubmissionsPage = () => {
   const { user } = useAuth();
   const { can } = usePermissions();
   const { canCreateSubmission, needsPayment } = useAuthorSubmissionAccess();
-  const submissions = useJournalStore((s) => s.submissions);
-  const getUserById = useJournalStore((s) => s.getUserById);
+
+  const { data: submissions = [], isLoading } = useQuery({
+    queryKey: ["submissions"],
+    queryFn: () => submissionsApi.list(),
+    enabled: !!user,
+  });
+
+  const getUserById = useMemo(() => buildUserDirectory(submissions), [submissions]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
   const filtered = useMemo(() => {
     let list = [...submissions];
-
-    if (user?.roles.includes("author") && !user.roles.some((r) =>
-      ["publisher_admin", "editor_in_chief", "editorial_staff", "handling_editor"].includes(r),
-    )) {
-      list = list.filter((s) => s.authorId === user.id);
-    }
 
     if (search) {
       const q = search.toLowerCase();
@@ -65,7 +67,7 @@ const SubmissionsPage = () => {
     return list.sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
-  }, [submissions, search, statusFilter, user]);
+  }, [submissions, search, statusFilter]);
 
   const pendingScreeningCount = useMemo(() => {
     if (!can("admin_screening", "decide")) return 0;
@@ -130,7 +132,11 @@ const SubmissionsPage = () => {
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="bg-white rounded-xl border shadow-sm p-8 text-center text-sm text-gray-500">
+          Loading submissions...
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={FileText}
           title="No submissions found"
@@ -161,15 +167,11 @@ const SubmissionsPage = () => {
             </TableHeader>
             <TableBody>
               {filtered.map((sub) => {
-                const author = getUserById(sub.authorId);
-                const editor = sub.handlingEditorId
-                  ? getUserById(sub.handlingEditorId)
-                  : undefined;
                 return (
                   <TableRow key={sub.id}>
                     <TableCell className="font-mono text-sm">{sub.submissionNumber}</TableCell>
                     <TableCell className="max-w-xs truncate font-medium">{sub.title}</TableCell>
-                    <TableCell>{author?.name ?? "—"}</TableCell>
+                    <TableCell>{sub.authorName ?? "—"}</TableCell>
                     <TableCell>
                       <StatusBadge status={sub.status} />
                     </TableCell>
@@ -180,7 +182,7 @@ const SubmissionsPage = () => {
                         showLabel={false}
                       />
                     </TableCell>
-                    <TableCell>{editor?.name ?? "—"}</TableCell>
+                    <TableCell>{sub.handlingEditorName ?? (sub.handlingEditorId ? "Assigned" : "—")}</TableCell>
                     <TableCell className="text-sm text-gray-500">
                       {new Date(sub.updatedAt).toLocaleDateString()}
                     </TableCell>

@@ -1,13 +1,14 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Clock, BookOpenCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/app/routes";
-import { useJournalStore } from "@/lib/store/store";
+import { publicArticlesApi } from "@/lib/api/publicArticles";
+import { publicSettingsApi } from "@/lib/api/publicSettings";
 import {
   formatPublicArticleDate,
-  filterPublicPublishedArticles,
-  getJournalDisplayName,
-  getPublicPublishedArticles,
+  matchesPublicArticleSearch,
+  matchesPublicArticleTopic,
 } from "@/lib/store/publicArticles";
 
 const ARTICLE_GRADIENTS = [
@@ -27,26 +28,21 @@ export function PublishedArticlesSection({
   searchQuery = "",
   selectedTopic = "All",
 }: PublishedArticlesSectionProps) {
-  const submissions = useJournalStore((s) => s.submissions);
-  const volumes = useJournalStore((s) => s.volumes);
-  const journalSettings = useJournalStore((s) => s.journalSettings);
-  const getUserById = useJournalStore((s) => s.getUserById);
+  const { data: allArticles = [] } = useQuery({
+    queryKey: ["public-articles"],
+    queryFn: () => publicArticlesApi.list(),
+  });
+  const { data: settings } = useQuery({
+    queryKey: ["public-settings"],
+    queryFn: () => publicSettingsApi.get(),
+  });
 
-  const allArticles = getPublicPublishedArticles(
-    submissions,
-    getUserById,
-    volumes,
-    journalSettings,
+  const articles = allArticles.filter(
+    (article) =>
+      matchesPublicArticleTopic(article, selectedTopic) &&
+      matchesPublicArticleSearch(article, searchQuery),
   );
-  const articles = filterPublicPublishedArticles(
-    submissions,
-    getUserById,
-    volumes,
-    journalSettings,
-    searchQuery,
-    selectedTopic,
-  );
-  const journalName = getJournalDisplayName(journalSettings);
+  const journalName = settings ? settings.shortName || settings.journalName : "the journal";
   const [featured, ...rest] = articles;
   const hasSearchQuery = searchQuery.trim().length > 0;
 

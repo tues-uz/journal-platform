@@ -1,32 +1,39 @@
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
-import {
-  canAuthorCreateSubmission,
-  hasApprovedPayment,
-  isPureAuthor,
-} from "@/lib/payment/access";
-import { useJournalStore } from "@/lib/store/store";
+import { paymentsApi } from "@/lib/api/payments";
+import { isPureAuthor } from "@/lib/payment/access";
 
 export function useAuthorSubmissionAccess() {
   const { user } = useAuth();
   const { can } = usePermissions();
-  const payments = useJournalStore((s) => s.payments);
-  const paymentSettings = useJournalStore((s) => s.paymentSettings);
 
-  const canCreateByRbac = can("submission", "create");
-  const canCreateByPayment = user
-    ? canAuthorCreateSubmission(user, payments, paymentSettings)
-    : false;
+  const { data: paymentSettings } = useQuery({
+    queryKey: ["payment-settings"],
+    queryFn: () => paymentsApi.getSettings(),
+    enabled: !!user,
+  });
 
-  const needsPayment =
-    !!user &&
-    paymentSettings.enabled &&
-    isPureAuthor(user.roles) &&
-    !hasApprovedPayment(user.id, payments);
+  const paymentGated = !!user && !!paymentSettings?.enabled && isPureAuthor(user.roles);
+
+  const { data: ownPayments = [] } = useQuery({
+    queryKey: ["payments", "all"],
+    queryFn: () => paymentsApi.listAll(),
+    enabled: paymentGated,
+    select: (payments) => payments.filter((p) => p.authorId === user?.id),
+  });
+
+  const latestPayment = [...ownPayments].sort(
+    (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
+  )[0];
+
+  const hasApprovedPayment = ownPayments.some((p) => p.status === "approved");
+  const needsPayment = paymentGated && !hasApprovedPayment;
 
   return {
-    canCreateSubmission: canCreateByRbac && canCreateByPayment,
+    canCreateSubmission: can("submission", "create") && !needsPayment,
     needsPayment,
     paymentSettings,
+    latestPayment,
   };
 }

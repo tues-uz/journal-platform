@@ -1,24 +1,19 @@
 import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/features/auth/useAuth";
-import {
-  getLatestPaymentForAuthor,
-  hasApprovedPayment,
-  isPureAuthor,
-} from "@/lib/payment/access";
-import { useJournalStore } from "@/lib/store/store";
+import { isPureAuthor } from "@/lib/payment/access";
+import { useAuthorSubmissionAccess } from "@/lib/payment/useAuthorSubmissionAccess";
 
 export function AuthorMembershipChip() {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const payments = useJournalStore((s) => s.payments);
-  const paymentSettings = useJournalStore((s) => s.paymentSettings);
+  const { paymentSettings, latestPayment } = useAuthorSubmissionAccess();
 
   if (!user || !isPureAuthor(user.roles)) {
     return null;
   }
 
-  if (!paymentSettings.enabled) {
+  if (!paymentSettings?.enabled) {
     return (
       <Badge variant="secondary" className="rounded-lg ml-auto bg-gray-100 text-gray-700">
         {t("membership.standardAccount")}
@@ -26,7 +21,7 @@ export function AuthorMembershipChip() {
     );
   }
 
-  if (hasApprovedPayment(user.id, payments)) {
+  if (latestPayment?.status === "approved") {
     return (
       <Badge
         variant="secondary"
@@ -37,7 +32,6 @@ export function AuthorMembershipChip() {
     );
   }
 
-  const latestPayment = getLatestPaymentForAuthor(user.id, payments);
   if (latestPayment?.status === "pending_review") {
     return (
       <Badge

@@ -12,11 +12,12 @@ import {
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SubmissionPositionChip } from "@/components/shared/SubmissionPositionChip";
 import { routes } from "@/app/routes";
-import type { StoreUser, Submission } from "@/lib/store/types";
+import type { DirectoryUser } from "@/lib/api/userDirectory";
+import type { Submission } from "@/lib/store/types";
 
 interface SubmissionListTableProps {
   submissions: Submission[];
-  getUserById: (id: string) => StoreUser | undefined;
+  getUserById: (id: string) => DirectoryUser | undefined;
   actionLabel?: string | ((submission: Submission) => string);
   extraColumns?: Array<{
     header: string;

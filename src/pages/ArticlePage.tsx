@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { ArrowLeft, Bookmark, Clock, Share2 } from "lucide-react";
 import JournalHeader from "@/components/JournalHeader";
@@ -9,11 +10,8 @@ import {
   buildArticleBody,
   getLandingArticleById,
 } from "@/lib/landing/articles";
-import {
-  formatPublicArticleDate,
-  getPublicPublishedArticles,
-} from "@/lib/store/publicArticles";
-import { useJournalStore } from "@/lib/store/store";
+import { formatPublicArticleDate } from "@/lib/store/publicArticles";
+import { publicArticlesApi } from "@/lib/api/publicArticles";
 
 const ARTICLE_GRADIENTS = [
   "from-slate-800 to-slate-600",
@@ -33,18 +31,25 @@ function gradientForId(id: string): string {
 
 const ArticlePage = () => {
   const { id = "" } = useParams();
-  const submissions = useJournalStore((s) => s.submissions);
-  const volumes = useJournalStore((s) => s.volumes);
-  const journalSettings = useJournalStore((s) => s.journalSettings);
-  const getUserById = useJournalStore((s) => s.getUserById);
 
   const landingArticle = getLandingArticleById(id);
-  const publishedArticle = getPublicPublishedArticles(
-    submissions,
-    getUserById,
-    volumes,
-    journalSettings,
-  ).find((article) => article.id === id);
+
+  const { data: publishedArticle, isLoading } = useQuery({
+    queryKey: ["public-article", id],
+    queryFn: () => publicArticlesApi.get(id),
+    enabled: !!id && !landingArticle,
+  });
+
+  if (!landingArticle && isLoading) {
+    return (
+      <div className="min-h-screen bg-white">
+        <JournalHeader />
+        <main className="pt-24 pb-16">
+          <div className="mx-auto max-w-3xl px-6 text-center text-gray-500">Loading article…</div>
+        </main>
+      </div>
+    );
+  }
 
   if (!landingArticle && !publishedArticle) {
     return <Navigate to="/404" replace />;

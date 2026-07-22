@@ -4,8 +4,8 @@ import { UserAvatar } from "@/components/shared/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { readFileAsDataUrl } from "@/lib/files/submissionFiles";
-import { useJournalStore } from "@/lib/store/store";
+import { usersApi } from "@/lib/api/users";
+import { ApiClientError } from "@/lib/api/client";
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -20,10 +20,7 @@ export function ProfileAvatarEditor({ size = "md" }: ProfileAvatarEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const storeUser = useJournalStore((s) => (user ? s.getUserById(user.id) : undefined));
-  const updateUserAvatar = useJournalStore((s) => s.updateUserAvatar);
-
-  const avatarUrl = storeUser?.avatarUrl ?? user?.avatarUrl;
+  const avatarUrl = user?.avatarUrl;
   const avatarSize = size === "lg" ? "h-20 w-20" : "h-16 w-16";
   const fallbackSize = size === "lg" ? "text-2xl" : "text-xl";
 
@@ -53,17 +50,17 @@ export function ProfileAvatarEditor({ size = "md" }: ProfileAvatarEditorProps) {
 
     setIsUploading(true);
     try {
-      const dataUrl = await readFileAsDataUrl(file);
-      updateUserAvatar(user.id, dataUrl);
-      refreshUser();
+      await usersApi.uploadAvatar(file);
+      await refreshUser();
       toast({
         title: "Profile picture updated",
         description: "Your new photo is now visible across the app.",
       });
-    } catch {
+    } catch (err) {
+      const message = err instanceof ApiClientError ? err.message : "We couldn't update your profile picture. Please try again.";
       toast({
         title: "Upload failed",
-        description: "We couldn't update your profile picture. Please try again.",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -71,14 +68,26 @@ export function ProfileAvatarEditor({ size = "md" }: ProfileAvatarEditorProps) {
     }
   };
 
-  const handleRemoveAvatar = () => {
+  const handleRemoveAvatar = async () => {
     if (!user) return;
-    updateUserAvatar(user.id, undefined);
-    refreshUser();
-    toast({
-      title: "Profile picture removed",
-      description: "Your initials will be shown instead.",
-    });
+    setIsUploading(true);
+    try {
+      await usersApi.removeAvatar();
+      await refreshUser();
+      toast({
+        title: "Profile picture removed",
+        description: "Your initials will be shown instead.",
+      });
+    } catch (err) {
+      const message = err instanceof ApiClientError ? err.message : "We couldn't remove your profile picture. Please try again.";
+      toast({
+        title: "Removal failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   if (!user) return null;

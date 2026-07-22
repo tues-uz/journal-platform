@@ -1,43 +1,40 @@
 import { useMemo } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Download } from "lucide-react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LayoutEditorWorkspace } from "@/components/layout-editor/LayoutEditorWorkspace";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SubmissionPositionSummary } from "@/components/shared/SubmissionPositionChip";
 import { DecisionFeedbackDisplay } from "@/components/shared/DecisionFeedbackDisplay";
 import { SubmissionWorkflowActions } from "@/components/shared/SubmissionWorkflowActions";
-import { Timeline } from "@/components/shared/Timeline";
 import { useAuth } from "@/features/auth/useAuth";
 import { canViewSubmission } from "@/lib/rbac/submissionAccess";
 import { usePermissions } from "@/lib/rbac/usePermissions";
-import { useJournalStore } from "@/lib/store/store";
 import { routes } from "@/app/routes";
-import {
-  downloadSubmissionFile,
-  getVisibleSubmissionFiles,
-} from "@/lib/files/submissionFiles";
-import { deriveLayoutPhase } from "@/lib/workflow/layoutPhase";
+import { getVisibleSubmissionFiles } from "@/lib/files/submissionFiles";
+import { submissionsApi } from "@/lib/api/submissions";
+import { buildUserDirectory } from "@/lib/api/userDirectory";
+import { getFileDownloadUrl } from "@/lib/api/files";
 import { useToast } from "@/hooks/use-toast";
 
 const SubmissionDetailPage = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
-  const submissions = useJournalStore((s) => s.submissions);
-  const activities = useJournalStore((s) => s.activities);
-  const volumes = useJournalStore((s) => s.volumes);
-  const journalSettings = useJournalStore((s) => s.journalSettings);
-  const getUserById = useJournalStore((s) => s.getUserById);
 
-  const submission = submissions.find((s) => s.id === id);
-  const author = submission ? getUserById(submission.authorId) : undefined;
-  const editor = submission?.handlingEditorId
-    ? getUserById(submission.handlingEditorId)
-    : undefined;
+  const { data: submission, isLoading } = useQuery({
+    queryKey: ["submission", id],
+    queryFn: () => submissionsApi.get(id as string),
+    enabled: !!id && !!user,
+  });
+
+  const getUserById = useMemo(
+    () => buildUserDirectory(submission ? [submission] : []),
+    [submission],
+  );
 
   const scope = submission && user ? {
     handlingEditorId: submission.handlingEditorId,
@@ -49,31 +46,6 @@ const SubmissionDetailPage = () => {
   } : undefined;
 
   usePermissions(scope);
-
-  const isAssignedLayoutEditor =
-    !!user &&
-    !!submission &&
-    user.roles.includes("layout_editor") &&
-    (submission.layoutEditorId === user.id || !submission.layoutEditorId);
-
-  const layoutPhase = submission ? deriveLayoutPhase(submission) : null;
-  const showLayoutWorkspace =
-    isAssignedLayoutEditor &&
-    submission?.status === "production" &&
-    layoutPhase !== null &&
-    layoutPhase !== "completed";
-
-  const issueVolumeLabels = useMemo(() => {
-    if (!submission?.volumeId || !submission.issueId) {
-      return { volumeLabel: undefined, issueLabel: undefined };
-    }
-    const volume = volumes.find((v) => v.id === submission.volumeId);
-    const issue = volume?.issues.find((i) => i.id === submission.issueId);
-    return {
-      volumeLabel: volume ? `Volume ${volume.number} (${volume.year})` : undefined,
-      issueLabel: issue ? `Issue ${issue.number}` : undefined,
-    };
-  }, [submission, volumes]);
 
   const visibleFiles = useMemo(() => {
     if (!submission || !user) return [];
@@ -87,25 +59,13 @@ const SubmissionDetailPage = () => {
     );
   }, [submission, user]);
 
-  const timelineEntries = useMemo(
-    () =>
-      activities
-        .filter((a) => a.submissionId === id)
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .map((a) => {
-          const actor = getUserById(a.actorId);
-          return {
-            id: a.id,
-            title: a.action,
-            actorName: a.actorName,
-            actorRoles: a.actorRoles ?? actor?.roles ?? [],
-            statusAfter: a.statusAfter,
-            description: a.details,
-            timestamp: a.timestamp,
-          };
-        }),
-    [activities, id, getUserById],
-  );
+  if (isLoading) {
+    return (
+      <AuthenticatedLayout title="Loading...">
+        <p className="text-gray-500">Loading submission...</p>
+      </AuthenticatedLayout>
+    );
+  }
 
   if (!submission) {
     return (
@@ -126,43 +86,6 @@ const SubmissionDetailPage = () => {
       ? routes.production
       : routes.dashboard;
     return <Navigate to={fallback} replace />;
-  }
-
-  if (showLayoutWorkspace && user) {
-    return (
-      <AuthenticatedLayout
-        title={submission.title}
-        breadcrumbs={[
-          { label: "Dashboard", href: routes.dashboard },
-          { label: "Assigned Articles", href: routes.production },
-          { label: submission.submissionNumber },
-        ]}
-      >
-        <LayoutEditorWorkspace
-          submission={submission}
-          user={user}
-          getUserById={getUserById}
-          journalName={journalSettings.journalName}
-          volumeLabel={issueVolumeLabels.volumeLabel}
-          issueLabel={issueVolumeLabels.issueLabel}
-          readOnly={layoutPhase === "ready_for_proofreading"}
-        />
-
-        <Card className="rounded-xl shadow-sm mt-6">
-          <CardHeader>
-            <CardTitle className="text-base">Activity Timeline</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Timeline
-              entries={timelineEntries}
-              currentStatus={submission.status}
-              submission={submission}
-              getUserById={getUserById}
-            />
-          </CardContent>
-        </Card>
-      </AuthenticatedLayout>
-    );
   }
 
   return (
@@ -217,11 +140,13 @@ const SubmissionDetailPage = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Author</p>
-                  <p className="text-sm font-medium">{author?.name}</p>
+                  <p className="text-sm font-medium">{submission.authorName ?? "—"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Handling Editor</p>
-                  <p className="text-sm font-medium">{editor?.name ?? "Not assigned"}</p>
+                  <p className="text-sm font-medium">
+                    {submission.handlingEditorName ?? (submission.handlingEditorId ? "Assigned" : "Not assigned")}
+                  </p>
                 </div>
               </div>
               <div>
@@ -273,13 +198,17 @@ const SubmissionDetailPage = () => {
                         size="sm"
                         className="rounded-lg h-8 flex-shrink-0"
                         title={`Download ${f.name}`}
-                        onClick={() => {
-                          if (downloadSubmissionFile(f)) return;
-                          toast({
-                            title: "Download unavailable",
-                            description: "This file was saved without its contents and cannot be downloaded.",
-                            variant: "destructive",
-                          });
+                        onClick={async () => {
+                          try {
+                            const url = await getFileDownloadUrl(submission.id, f.id);
+                            window.open(url, "_blank", "noopener,noreferrer");
+                          } catch {
+                            toast({
+                              title: "Download unavailable",
+                              description: "Could not get a download link for this file.",
+                              variant: "destructive",
+                            });
+                          }
                         }}
                       >
                         <Download className="h-3.5 w-3.5 mr-1.5" />
@@ -296,12 +225,10 @@ const SubmissionDetailPage = () => {
         <TabsContent value="timeline">
           <Card className="rounded-xl shadow-sm">
             <CardContent className="p-6">
-              <Timeline
-                entries={timelineEntries}
-                currentStatus={submission.status}
-                submission={submission}
-                getUserById={getUserById}
-              />
+              <p className="text-sm text-gray-500">
+                Detailed activity history isn't exposed by the API yet — the backend records every
+                action internally, but there's no endpoint to read it back.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>

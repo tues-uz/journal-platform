@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Library, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
@@ -18,20 +19,34 @@ import {
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
-import { useJournalStore } from "@/lib/store/store";
+import { volumesApi, type ManagedVolume } from "@/lib/api/volumes";
+import { issuesApi, type ManagedIssue } from "@/lib/api/issues";
+import { submissionsApi } from "@/lib/api/submissions";
+import { ApiClientError } from "@/lib/api/client";
 import { routes } from "@/app/routes";
 import { useToast } from "@/hooks/use-toast";
 
 export default function VolumesPage() {
+  const { user } = useAuth();
   const { can } = usePermissions();
   const { toast } = useToast();
-  const volumes = useJournalStore((s) => s.volumes);
-  const submissions = useJournalStore((s) => s.submissions);
-  const getUserById = useJournalStore((s) => s.getUserById);
-  const addVolume = useJournalStore((s) => s.addVolume);
-  const addIssue = useJournalStore((s) => s.addIssue);
-  const updateIssue = useJournalStore((s) => s.updateIssue);
-  const updateSubmission = useJournalStore((s) => s.updateSubmission);
+  const queryClient = useQueryClient();
+
+  const { data: volumes = [] } = useQuery({
+    queryKey: ["volumes"],
+    queryFn: () => volumesApi.list(),
+    enabled: !!user,
+  });
+  const { data: issues = [] } = useQuery({
+    queryKey: ["issues"],
+    queryFn: () => issuesApi.list(),
+    enabled: !!user,
+  });
+  const { data: submissions = [] } = useQuery({
+    queryKey: ["submissions"],
+    queryFn: () => submissionsApi.list(),
+    enabled: !!user,
+  });
 
   const [volNumber, setVolNumber] = useState("");
   const [volYear, setVolYear] = useState(String(new Date().getFullYear()));
@@ -40,59 +55,170 @@ export default function VolumesPage() {
   const [issueNumber, setIssueNumber] = useState("");
   const [issueTitle, setIssueTitle] = useState("");
 
-  const publishable = useMemo(
-    () => submissions.filter((s) => s.status === "published" || s.status === "production"),
-    [submissions],
-  );
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ["volumes"] });
+    void queryClient.invalidateQueries({ queryKey: ["issues"] });
+  };
 
-  const getSubmissionTitle = (id: string) =>
-    submissions.find((s) => s.id === id)?.submissionNumber ?? id;
+  const createVolumeMutation = useMutation({
+    mutationFn: volumesApi.create,
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Volume created" });
+      setVolNumber("");
+      setVolTitle("");
+    },
+    onError: (err) => {
+      const message = err instanceof ApiClientError ? err.message : "Failed to create volume.";
+      toast({ title: "Create failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const createIssueMutation = useMutation({
+    mutationFn: issuesApi.create,
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Issue created" });
+      setIssueNumber("");
+      setIssueTitle("");
+    },
+    onError: (err) => {
+      const message = err instanceof ApiClientError ? err.message : "Failed to create issue.";
+      toast({ title: "Create failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const publishIssueMutation = useMutation({
+    mutationFn: (issueId: string) => issuesApi.publish(issueId),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Issue published" });
+    },
+    onError: (err) => {
+      const message = err instanceof ApiClientError ? err.message : "Failed to publish issue.";
+      toast({ title: "Publish failed", description: message, variant: "destructive" });
+    },
+  });
 
   const handleAddVolume = () => {
     if (!can("volume_issue", "create") || !volNumber.trim() || !volYear.trim()) return;
-    addVolume({
+    createVolumeMutation.mutate({
       number: Number(volNumber),
       year: Number(volYear),
       title: volTitle.trim() || undefined,
-      status: "draft",
     });
-    toast({ title: "Volume created" });
-    setVolNumber("");
-    setVolTitle("");
   };
 
   const handleAddIssue = () => {
     if (!can("volume_issue", "create") || !issueVolumeId || !issueNumber.trim()) return;
-    const created = addIssue(issueVolumeId, {
+    createIssueMutation.mutate({
+      volumeId: issueVolumeId,
       number: Number(issueNumber),
       title: issueTitle.trim() || undefined,
-      status: "draft",
-      articleIds: [],
     });
-    if (created) {
-      toast({ title: "Issue created" });
-      setIssueNumber("");
-      setIssueTitle("");
+  };
+
+  const issuesByVolume = useMemo(() => {
+    const map = new Map<string, ManagedIssue[]>();
+    for (const issue of issues) {
+      const list = map.get(issue.volumeId) ?? [];
+      list.push(issue);
+      map.set(issue.volumeId, list);
     }
-  };
+    return map;
+  }, [issues]);
 
-  const assignArticle = (volumeId: string, issueId: string, submissionId: string) => {
-    if (!can("volume_issue", "assign")) return;
-    const volume = volumes.find((v) => v.id === volumeId);
-    const issue = volume?.issues.find((i) => i.id === issueId);
-    if (!issue || issue.articleIds.includes(submissionId)) return;
-    updateIssue(volumeId, issueId, { articleIds: [...issue.articleIds, submissionId] });
-    updateSubmission(submissionId, { volumeId, issueId });
-    toast({ title: "Article assigned to issue" });
-  };
+  const submissionsByIssue = useMemo(() => {
+    const map = new Map<string, typeof submissions>();
+    for (const sub of submissions) {
+      if (!sub.issueId) continue;
+      const list = map.get(sub.issueId) ?? [];
+      list.push(sub);
+      map.set(sub.issueId, list);
+    }
+    return map;
+  }, [submissions]);
 
-  const publishIssue = (volumeId: string, issueId: string) => {
-    if (!can("volume_issue", "edit")) return;
-    updateIssue(volumeId, issueId, {
-      status: "published",
-      publishedAt: new Date().toISOString(),
-    });
-    toast({ title: "Issue published" });
+  const renderVolume = (volume: ManagedVolume) => {
+    const volumeIssues = issuesByVolume.get(volume.id) ?? [];
+    return (
+      <Card key={volume.id} className="rounded-xl shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="text-lg">
+              {volume.title ?? `Volume ${volume.number}`} ({volume.year})
+            </CardTitle>
+            <Badge variant={volume.status === "published" ? "default" : "secondary"} className="rounded-lg">
+              {volume.status}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {volumeIssues.length === 0 ? (
+            <p className="text-sm text-gray-500">No issues yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Issue</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Articles</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {volumeIssues.map((issue) => {
+                  const assigned = submissionsByIssue.get(issue.id) ?? [];
+                  return (
+                    <TableRow key={issue.id}>
+                      <TableCell className="font-medium">Issue {issue.number}</TableCell>
+                      <TableCell>{issue.title ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant={issue.status === "published" ? "default" : "secondary"} className="rounded-lg">
+                          {issue.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {assigned.length === 0 ? (
+                          <span className="text-sm text-gray-500">
+                            No articles assigned yet — assign a volume/issue when publishing an article.
+                          </span>
+                        ) : (
+                          <div className="space-y-1">
+                            {assigned.map((sub) => (
+                              <div key={sub.id} className="text-sm">
+                                <Link to={routes.submissionById(sub.id)} className="text-blue-600 hover:underline">
+                                  {sub.submissionNumber}
+                                </Link>
+                                {sub.authorName && <span className="text-gray-500"> — {sub.authorName}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {can("publication", "publish") && issue.status !== "published" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-lg"
+                            disabled={publishIssueMutation.isPending}
+                            onClick={() => publishIssueMutation.mutate(issue.id)}
+                          >
+                            Publish Issue
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    );
   };
 
   return (
@@ -121,9 +247,9 @@ export default function VolumesPage() {
                 <Label>Title (optional)</Label>
                 <Input value={volTitle} onChange={(e) => setVolTitle(e.target.value)} className="rounded-xl mt-1" />
               </div>
-              <Button className="rounded-xl" onClick={handleAddVolume}>
+              <Button className="rounded-xl" onClick={handleAddVolume} disabled={createVolumeMutation.isPending}>
                 <Plus className="h-4 w-4 mr-2" />
-                Add Volume
+                {createVolumeMutation.isPending ? "Adding..." : "Add Volume"}
               </Button>
             </CardContent>
           </Card>
@@ -155,9 +281,13 @@ export default function VolumesPage() {
                 <Label>Title (optional)</Label>
                 <Input value={issueTitle} onChange={(e) => setIssueTitle(e.target.value)} className="rounded-xl mt-1" />
               </div>
-              <Button className="rounded-xl" onClick={handleAddIssue} disabled={!issueVolumeId}>
+              <Button
+                className="rounded-xl"
+                onClick={handleAddIssue}
+                disabled={!issueVolumeId || createIssueMutation.isPending}
+              >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Issue
+                {createIssueMutation.isPending ? "Adding..." : "Add Issue"}
               </Button>
             </CardContent>
           </Card>
@@ -171,112 +301,7 @@ export default function VolumesPage() {
           description="Create a volume and issue to assign accepted articles for publication."
         />
       ) : (
-        <div className="space-y-6">
-          {volumes.map((volume) => (
-            <Card key={volume.id} className="rounded-xl shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <CardTitle className="text-lg">
-                    {volume.title ?? `Volume ${volume.number}`} ({volume.year})
-                  </CardTitle>
-                  <Badge
-                    variant={volume.status === "published" ? "default" : "secondary"}
-                    className="rounded-lg"
-                  >
-                    {volume.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Issue</TableHead>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Articles</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {volume.issues.map((issue) => (
-                      <TableRow key={issue.id}>
-                        <TableCell className="font-medium">Issue {issue.number}</TableCell>
-                        <TableCell>{issue.title ?? "—"}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={issue.status === "published" ? "default" : "secondary"}
-                            className="rounded-lg"
-                          >
-                            {issue.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {issue.articleIds.length === 0 ? (
-                            <span className="text-sm text-gray-500">No articles assigned</span>
-                          ) : (
-                            <div className="space-y-1">
-                              {issue.articleIds.map((articleId) => {
-                                const sub = submissions.find((s) => s.id === articleId);
-                                const author = sub ? getUserById(sub.authorId) : undefined;
-                                return (
-                                  <div key={articleId} className="text-sm">
-                                    <Link
-                                      to={routes.submissionById(articleId)}
-                                      className="text-blue-600 hover:underline"
-                                    >
-                                      {getSubmissionTitle(articleId)}
-                                    </Link>
-                                    {author && (
-                                      <span className="text-gray-500"> — {author.name}</span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                          {can("volume_issue", "assign") && publishable.length > 0 && (
-                            <select
-                              className="mt-2 w-full rounded-lg border px-2 py-1 text-xs"
-                              defaultValue=""
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  assignArticle(volume.id, issue.id, e.target.value);
-                                  e.target.value = "";
-                                }
-                              }}
-                            >
-                              <option value="">Assign article…</option>
-                              {publishable
-                                .filter((s) => !issue.articleIds.includes(s.id))
-                                .map((s) => (
-                                  <option key={s.id} value={s.id}>
-                                    {s.submissionNumber} — {s.title.slice(0, 40)}
-                                  </option>
-                                ))}
-                            </select>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {can("volume_issue", "edit") && issue.status !== "published" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-lg"
-                              onClick={() => publishIssue(volume.id, issue.id)}
-                            >
-                              Publish Issue
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <div className="space-y-6">{volumes.map(renderVolume)}</div>
       )}
     </AuthenticatedLayout>
   );
