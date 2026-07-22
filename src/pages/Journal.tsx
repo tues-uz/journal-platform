@@ -12,11 +12,12 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useRef, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { routes } from "@/app/routes";
 import { filterLandingArticles, LANDING_ARTICLES } from "@/lib/landing/articles";
 import { Input } from "@/components/ui/input";
-import { useJournalStore } from "@/lib/store/store";
-import { filterPublicPublishedArticles } from "@/lib/store/publicArticles";
+import { publicArticlesApi } from "@/lib/api/publicArticles";
+import { matchesPublicArticleSearch, matchesPublicArticleTopic } from "@/lib/store/publicArticles";
 
 const Journal = () => {
   const [selectedTopic, setSelectedTopic] = useState("All");
@@ -49,10 +50,10 @@ const Journal = () => {
     }
   };
 
-  const submissions = useJournalStore((state) => state.submissions);
-  const volumes = useJournalStore((state) => state.volumes);
-  const journalSettings = useJournalStore((state) => state.journalSettings);
-  const getUserById = useJournalStore((state) => state.getUserById);
+  const { data: publishedArticles = [] } = useQuery({
+    queryKey: ["public-articles"],
+    queryFn: () => publicArticlesApi.list(),
+  });
 
   const filteredArticles = useMemo(
     () => filterLandingArticles(LANDING_ARTICLES, searchQuery, selectedTopic),
@@ -61,15 +62,12 @@ const Journal = () => {
 
   const filteredPublishedArticles = useMemo(
     () =>
-      filterPublicPublishedArticles(
-        submissions,
-        getUserById,
-        volumes,
-        journalSettings,
-        searchQuery,
-        selectedTopic,
+      publishedArticles.filter(
+        (article) =>
+          matchesPublicArticleTopic(article, selectedTopic) &&
+          matchesPublicArticleSearch(article, searchQuery),
       ),
-    [submissions, getUserById, volumes, journalSettings, searchQuery, selectedTopic],
+    [publishedArticles, searchQuery, selectedTopic],
   );
 
   const featuredArticle = filteredArticles.find((a) => a.featured);

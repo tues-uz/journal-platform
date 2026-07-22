@@ -54,6 +54,12 @@ export interface UserCreateInput {
   institution?: string;
 }
 
+interface PresignedUploadResponseDto {
+  uploadUrl: string;
+  key: string;
+  expiresAt: string;
+}
+
 export const usersApi = {
   async candidates(role: "HANDLING_EDITOR" | "REVIEWER"): Promise<UserCandidate[]> {
     const dtos = await apiRequest<UserSummaryDto[]>("/api/users/candidates", { params: { role } });
@@ -92,6 +98,42 @@ export const usersApi = {
       method: "PATCH",
       body: { status: status.toUpperCase() },
     });
+    return mapUserDto(dto);
+  },
+
+  async updateMe(input: { name?: string; institution?: string }): Promise<ManagedUser> {
+    const dto = await apiRequest<UserDto>("/api/me", {
+      method: "PATCH",
+      body: input,
+    });
+    return mapUserDto(dto);
+  },
+
+  /** Presign → direct PUT to R2 → complete. Same three-call shape as submission file uploads. */
+  async uploadAvatar(file: File): Promise<ManagedUser> {
+    const presigned = await apiRequest<PresignedUploadResponseDto>("/api/me/avatar/presign", {
+      method: "POST",
+      body: { filename: file.name, contentType: file.type || "application/octet-stream" },
+    });
+
+    const putRes = await fetch(presigned.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+    if (!putRes.ok) {
+      throw new Error(`Upload to storage failed (${putRes.status})`);
+    }
+
+    const dto = await apiRequest<UserDto>("/api/me/avatar/complete", {
+      method: "POST",
+      body: { key: presigned.key },
+    });
+    return mapUserDto(dto);
+  },
+
+  async removeAvatar(): Promise<ManagedUser> {
+    const dto = await apiRequest<UserDto>("/api/me/avatar", { method: "DELETE" });
     return mapUserDto(dto);
   },
 };

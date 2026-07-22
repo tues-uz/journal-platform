@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/features/auth/useAuth";
 import { submissionsApi } from "@/lib/api/submissions";
-import { useJournalStore } from "@/lib/store/store";
+import { usersApi } from "@/lib/api/users";
 import { countByStatus, filterSubmissionsForReports } from "@/lib/store/submissionFilters";
 import { ALL_STATUSES, getStatusLabel } from "@/lib/status/config";
 import { routes } from "@/app/routes";
@@ -27,9 +27,11 @@ export default function ReportsPage() {
     enabled: !!user,
   });
 
-  // Real GET /api/users exists but user management (UsersPage) isn't wired
-  // yet as a whole — this stat stays on the mock store until that lands.
-  const users = useJournalStore((s) => s.users);
+  const { data: users = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => usersApi.list(),
+    enabled: !!user,
+  });
 
   const scopedSubmissions = useMemo(() => {
     if (!user) return [];

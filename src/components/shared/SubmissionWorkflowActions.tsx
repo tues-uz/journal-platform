@@ -39,6 +39,8 @@ import { FileUpload, type UploadedFileMeta } from "@/components/shared/FileUploa
 import { MANUSCRIPT_UPLOAD_ACCEPT, MANUSCRIPT_UPLOAD_HINT, inferPublicationFormat } from "@/lib/files/submissionFiles";
 import { workflowApi } from "@/lib/api/workflow";
 import { usersApi } from "@/lib/api/users";
+import { volumesApi } from "@/lib/api/volumes";
+import { issuesApi } from "@/lib/api/issues";
 import { uploadSubmissionFiles, type BackendPublicationFormat } from "@/lib/api/files";
 import { ApiClientError } from "@/lib/api/client";
 
@@ -115,6 +117,9 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
 
   const canAssignEditor = can("editor_assignment", "assign") || isAdmin;
   const canAssignReviewer = can("reviewer_assignment", "assign") && isMyAssignment;
+  const canPublish = can("publication", "publish") || isAdmin;
+  const showPublishPanel =
+    canPublish && submission.status === "production" && submission.proofApproved;
 
   const { data: handlingEditors = [] } = useQuery({
     queryKey: ["users", "candidates", "HANDLING_EDITOR"],
@@ -125,6 +130,16 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     queryKey: ["users", "candidates", "REVIEWER"],
     queryFn: () => usersApi.candidates("REVIEWER"),
     enabled: canAssignReviewer && submission.status === "assigned",
+  });
+  const { data: volumes = [] } = useQuery({
+    queryKey: ["volumes"],
+    queryFn: () => volumesApi.list(),
+    enabled: showPublishPanel,
+  });
+  const { data: issues = [] } = useQuery({
+    queryKey: ["issues"],
+    queryFn: () => issuesApi.list(),
+    enabled: showPublishPanel,
   });
 
   const invalidate = () => {
@@ -143,6 +158,8 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
 
   const [selectedEditor, setSelectedEditor] = useState("");
   const [selectedReviewer, setSelectedReviewer] = useState("");
+  const [selectedVolumeId, setSelectedVolumeId] = useState("");
+  const [selectedIssueId, setSelectedIssueId] = useState("");
   const [plagiarismScore, setPlagiarismScore] = useState(
     submission.similarityScore?.toString() ?? "",
   );
@@ -892,22 +909,58 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
   }
 
   // ── Publisher / Admin: Publish ──
-  if (
-    (can("publication", "publish") || isAdmin) &&
-    submission.status === "production" &&
-    submission.proofApproved
-  ) {
+  if (showPublishPanel) {
+    const issuesForVolume = issues.filter((i) => i.volumeId === selectedVolumeId);
     panels.push(
       <ActionPanel key="publish" title="Publisher / Admin — Publish Article">
+        <div className="w-full flex flex-wrap gap-2">
+          <Select
+            value={selectedVolumeId}
+            onValueChange={(value) => {
+              setSelectedVolumeId(value);
+              setSelectedIssueId("");
+            }}
+          >
+            <SelectTrigger className="w-48 rounded-xl bg-white">
+              <SelectValue placeholder="Select volume" />
+            </SelectTrigger>
+            <SelectContent>
+              {volumes.map((v) => (
+                <SelectItem key={v.id} value={v.id}>
+                  Volume {v.number} ({v.year})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedIssueId} onValueChange={setSelectedIssueId} disabled={!selectedVolumeId}>
+            <SelectTrigger className="w-48 rounded-xl bg-white">
+              <SelectValue placeholder="Select issue" />
+            </SelectTrigger>
+            <SelectContent>
+              {issuesForVolume.map((i) => (
+                <SelectItem key={i.id} value={i.id}>
+                  Issue {i.number}
+                  {i.title ? ` — ${i.title}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <p className="w-full text-xs text-gray-500">
+          Volume and issue cannot be changed after publishing — double-check before confirming.
+        </p>
         <Button
           className="rounded-xl"
+          disabled={!selectedVolumeId || !selectedIssueId}
           onClick={() =>
             openConfirm({
               title: "Publish Article",
               description: "Publish this article and make it publicly available.",
               confirmLabel: "Publish",
               onConfirm: async () => {
-                await mutation.mutateAsync(() => workflowApi.publish(submission.id));
+                await mutation.mutateAsync(() =>
+                  workflowApi.publish(submission.id, undefined, selectedVolumeId, selectedIssueId),
+                );
                 toast({ title: "Article published" });
               },
             })

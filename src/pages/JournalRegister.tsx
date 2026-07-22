@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, BookOpen, User, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ import {
 } from "@/features/auth/registerAuthor";
 import { authApi } from "@/lib/api/auth";
 import { ApiClientError } from "@/lib/api/client";
-import { useJournalStore } from "@/lib/store/store";
+import { paymentsApi } from "@/lib/api/payments";
 
 const JournalRegister = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -38,7 +39,7 @@ const JournalRegister = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { login, isAuthenticated } = useAuth();
-  const paymentSettings = useJournalStore((s) => s.paymentSettings);
+  const queryClient = useQueryClient();
   const redirectFeedback = getRedirectFeedback(redirectStatus);
 
   useEffect(() => {
@@ -102,11 +103,18 @@ const JournalRegister = () => {
         description: "Welcome! Complete your submission fee to start submitting manuscripts.",
       });
 
+      const paymentSettings = await queryClient
+        .fetchQuery({
+          queryKey: ["payment-settings"],
+          queryFn: () => paymentsApi.getSettings(),
+        })
+        .catch(() => null);
+
       setTimeout(() => {
         void runPostSignInRedirect(
           prefetchRoute,
           navigate,
-          paymentSettings.enabled ? routes.payment : routes.dashboard,
+          paymentSettings?.enabled ? routes.payment : routes.dashboard,
           (status) => {
             setRedirectStatus(status);
           },
