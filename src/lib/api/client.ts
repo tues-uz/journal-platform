@@ -1,7 +1,8 @@
 import { tokenStorage } from "@/lib/api/tokenStorage";
 import type { ApiError as ApiErrorDetail, ApiResponse } from "@/lib/api/types";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+const rawBase = import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_API_URL ?? "";
+const API_BASE_URL = rawBase ? rawBase.replace(/\/+$/, "") : "";
 
 export class ApiClientError extends Error {
   status: number;
