@@ -6,6 +6,7 @@ import { isDemoMode } from "@/lib/demo/mode";
 export interface UserCandidate {
   id: string;
   name: string;
+  avatarUrl?: string;
 }
 
 interface UserSummaryDto {

@@ -148,7 +148,7 @@ export function userToDto(user: StoreUser) {
 }
 
 export function userToCandidate(user: StoreUser): UserCandidate {
-  return { id: user.id, name: user.name };
+  return { id: user.id, name: user.name, avatarUrl: user.avatarUrl };
 }
 
 export function paymentToDto(payment: PaymentRequest): ManagedPayment {
