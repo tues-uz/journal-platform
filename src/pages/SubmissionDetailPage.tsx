@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Building2, Download, Fingerprint, Globe, Mail, Tag, User, UserRoundCog } from "lucide-react";
+import { BookOpen, Building2, Download, Fingerprint, Globe, Mail, Tag, User, UserRoundCog, type LucideIcon } from "lucide-react";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -56,7 +56,7 @@ function MetadataField({
   label,
   value,
 }: {
-  icon?: React.ComponentType<{ className?: string }>;
+  icon?: LucideIcon;
   label: string;
   value: React.ReactNode;
 }) {

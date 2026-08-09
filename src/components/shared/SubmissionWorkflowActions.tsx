@@ -43,7 +43,7 @@ import {
   getHandlingEditorIds,
   hasHandlingEditors,
 } from "@/lib/workflow/handlingEditors";
-import type { Submission, SubmissionStatus } from "@/lib/store/types";
+import type { ReviewerAssignment, Submission, SubmissionStatus } from "@/lib/store/types";
 import { useToast } from "@/hooks/use-toast";
 import { routes } from "@/app/routes";
 import { FileUpload, type UploadedFileMeta } from "@/components/shared/FileUpload";
