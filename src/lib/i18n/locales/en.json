@@ -1,5 +1,10 @@
 {
   "nav": {
+    "sections": {
+      "overview": "Overview",
+      "workflow": "Workflow",
+      "account": "Account"
+    },
     "dashboard": "Dashboard",
     "submissions": "Submissions",
     "mySubmissions": "My Submissions",
@@ -15,7 +20,7 @@
     "editorialDecision": "Editorial Decision",
     "reviewerAssignment": "Reviewer Assignment",
     "production": "Production",
-    "copyeditingQueue": "Copyediting Queue",
+    "productionQueue": "Production Queue",
     "layoutQueue": "Assigned Articles",
     "productionFiles": "Completed Layouts",
     "published": "Published Articles",

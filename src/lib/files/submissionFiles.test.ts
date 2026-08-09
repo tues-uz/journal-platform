@@ -13,7 +13,8 @@ describe("publication file helpers", () => {
     expect(inferPublicationFormat("article.html")).toBe("html");
     expect(inferPublicationFormat("article.xml")).toBe("xml");
     expect(inferPublicationFormat("supplement.zip")).toBe("supplementary");
-    expect(inferPublicationFormat("figure-2.png")).toBe("supplementary");
+    expect(inferPublicationFormat("article.docx")).toBe("other");
+    expect(inferPublicationFormat("article.doc")).toBe("other");
     expect(inferPublicationFormat("figure-2.jpg")).toBe("supplementary");
   });
 

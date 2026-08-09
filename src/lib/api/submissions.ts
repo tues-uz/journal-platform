@@ -5,9 +5,17 @@ import type {
   SubmissionFile,
   SubmissionStatus,
   PlagiarismStatus,
+  ReviewerAssignment,
   ReviewerInvitationStatus,
   PublicationFileFormat,
 } from "@/lib/store/types";
+import {
+  fromNumericIssueId,
+  fromNumericSubmissionId,
+  fromNumericUserId,
+  fromNumericVolumeId,
+} from "@/lib/demo/ids";
+import { isDemoMode } from "@/lib/demo/mode";
 
 interface SubmissionFileDto {
   id: number;
@@ -19,6 +27,14 @@ interface SubmissionFileDto {
   version: number | null;
   uploadedById: number;
   uploadedAt: string;
+}
+
+interface ReviewerAssignmentDto {
+  reviewerId: number;
+  invitationStatus: string;
+  reviewSubmitted?: boolean;
+  recommendation: string | null;
+  comments: string | null;
 }
 
 export interface SubmissionDto {
@@ -35,12 +51,16 @@ export interface SubmissionDto {
   authors: SubmissionAuthor[];
   handlingEditorId: number | null;
   handlingEditorName: string | null;
+  handlingEditorIds: number[] | null;
   reviewerId: number | null;
   reviewerName: string | null;
   pendingReviewerId: number | null;
   reviewerInvitationStatus: string | null;
+  reviewers: ReviewerAssignmentDto[] | null;
+  hePrescreenComplete: boolean;
   proofReady: boolean;
   proofApproved: boolean;
+  acceptancePaymentVerified?: boolean;
   reviewSubmitted: boolean;
   decisionReason: string | null;
   reviewComments: string | null;
@@ -71,6 +91,50 @@ export interface SubmissionDto {
   updatedAt: string;
 }
 
+function mapReviewerAssignmentDto(
+  dto: ReviewerAssignmentDto,
+  resolveUserId: (id: number | string) => string,
+): ReviewerAssignment {
+  return {
+    reviewerId: resolveUserId(dto.reviewerId),
+    invitationStatus: dto.invitationStatus.toLowerCase() as ReviewerInvitationStatus,
+    reviewSubmitted: dto.reviewSubmitted ?? undefined,
+    recommendation: dto.recommendation?.toLowerCase(),
+    comments: dto.comments ?? undefined,
+  };
+}
+
+function mapReviewersFromDto(
+  dto: SubmissionDto,
+  resolveUserId: (id: number | string) => string,
+): ReviewerAssignment[] | undefined {
+  if (dto.reviewers?.length) {
+    return dto.reviewers.map((slot) => mapReviewerAssignmentDto(slot, resolveUserId));
+  }
+
+  const legacy: ReviewerAssignment[] = [];
+  if (dto.reviewerId != null) {
+    legacy.push({
+      reviewerId: resolveUserId(dto.reviewerId),
+      invitationStatus:
+        (dto.reviewerInvitationStatus?.toLowerCase() as ReviewerInvitationStatus | undefined) ??
+        "accepted",
+      reviewSubmitted: dto.reviewSubmitted ?? undefined,
+    });
+  }
+  if (dto.pendingReviewerId != null) {
+    const pendingId = resolveUserId(dto.pendingReviewerId);
+    if (!legacy.some((slot) => slot.reviewerId === pendingId)) {
+      legacy.push({
+        reviewerId: pendingId,
+        invitationStatus: "pending",
+      });
+    }
+  }
+
+  return legacy.length > 0 ? legacy : undefined;
+}
+
 function lower<T extends string>(value: string | null | undefined): T | undefined {
   return value ? (value.toLowerCase() as T) : undefined;
 }
@@ -90,7 +154,7 @@ function mapFile(dto: SubmissionFileDto): SubmissionFile {
 }
 
 export function mapSubmissionDto(dto: SubmissionDto): Submission {
-  return {
+  const mapped = {
     id: String(dto.id),
     submissionNumber: dto.submissionNumber,
     title: dto.title,
@@ -104,12 +168,16 @@ export function mapSubmissionDto(dto: SubmissionDto): Submission {
     authors: dto.authors,
     handlingEditorId: dto.handlingEditorId != null ? String(dto.handlingEditorId) : undefined,
     handlingEditorName: dto.handlingEditorName ?? undefined,
+    handlingEditorIds: dto.handlingEditorIds?.map((id) => String(id)),
     reviewerId: dto.reviewerId != null ? String(dto.reviewerId) : undefined,
     reviewerName: dto.reviewerName ?? undefined,
     pendingReviewerId: dto.pendingReviewerId != null ? String(dto.pendingReviewerId) : undefined,
     reviewerInvitationStatus: lower<ReviewerInvitationStatus>(dto.reviewerInvitationStatus),
+    reviewers: mapReviewersFromDto(dto, (id) => String(id)),
+    hePrescreenComplete: dto.hePrescreenComplete,
     proofReady: dto.proofReady,
     proofApproved: dto.proofApproved,
+    acceptancePaymentVerified: dto.acceptancePaymentVerified ?? false,
     reviewSubmitted: dto.reviewSubmitted,
     decisionReason: dto.decisionReason ?? undefined,
     reviewComments: dto.reviewComments ?? undefined,
@@ -138,6 +206,25 @@ export function mapSubmissionDto(dto: SubmissionDto): Submission {
     files: dto.files.map(mapFile),
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
+  };
+
+  if (!isDemoMode()) return mapped;
+
+  return {
+    ...mapped,
+    id: fromNumericSubmissionId(dto.id),
+    authorId: fromNumericUserId(dto.authorId) ?? mapped.authorId,
+    handlingEditorId: fromNumericUserId(dto.handlingEditorId ?? undefined),
+    handlingEditorIds: dto.handlingEditorIds
+      ?.map((id) => fromNumericUserId(id))
+      .filter((id): id is string => !!id),
+    reviewerId: fromNumericUserId(dto.reviewerId ?? undefined),
+    pendingReviewerId: fromNumericUserId(dto.pendingReviewerId ?? undefined),
+    reviewers: mapReviewersFromDto(dto, (id) => fromNumericUserId(id) ?? String(id)),
+    copyeditorId: fromNumericUserId(dto.copyeditorId ?? undefined),
+    layoutEditorId: fromNumericUserId(dto.layoutEditorId ?? undefined),
+    volumeId: fromNumericVolumeId(dto.volumeId ?? undefined),
+    issueId: fromNumericIssueId(dto.issueId ?? undefined),
   };
 }
 

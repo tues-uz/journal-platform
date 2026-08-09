@@ -2,6 +2,8 @@ import { apiRequest } from "@/lib/api/client";
 import type { TokenPair } from "@/lib/api/tokenStorage";
 import type { AuthUser } from "@/features/auth/storage";
 import type { Role } from "@/lib/rbac/types";
+import { fromNumericUserId } from "@/lib/demo/ids";
+import { isDemoMode } from "@/lib/demo/mode";
 
 interface UserDto {
   id: number;
@@ -23,8 +25,12 @@ function mapRole(role: string): Role {
 }
 
 function mapUserDto(dto: UserDto): AuthUser {
+  const id = isDemoMode()
+    ? fromNumericUserId(dto.id) ?? String(dto.id)
+    : String(dto.id);
+
   return {
-    id: String(dto.id),
+    id,
     name: dto.name,
     email: dto.email,
     roles: dto.roles.map(mapRole),

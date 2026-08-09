@@ -3,12 +3,19 @@ import type { Role } from "@/lib/rbac/types";
 import type { Submission, SubmissionStatus } from "@/lib/store/types";
 import type { DecisionSlug } from "@/lib/workflow/submissionActions";
 import { isReadyForFinalEditorialDecision } from "@/lib/workflow/submissionActions";
+import {
+  getHandlingEditorIds,
+  hasHandlingEditors,
+  isHandlingEditorOnSubmission,
+} from "@/lib/workflow/handlingEditors";
+import { buildReviewerScope, getReviewerSlot, isReviewerOnSubmission } from "@/lib/workflow/reviewers";
 
 const SCREENING_STATUSES: SubmissionStatus[] = ["submitted", "administrative_review"];
 const PRODUCTION_STATUSES: SubmissionStatus[] = [
   "accepted",
   "copyediting",
   "production",
+  "scheduled",
   "published",
 ];
 
@@ -20,11 +27,10 @@ export function buildSubmissionScope(submission: Submission, userId: string) {
   return {
     submissionAuthorId: submission.authorId,
     handlingEditorId: submission.handlingEditorId,
-    reviewerId: submission.reviewerId,
-    pendingReviewerId: submission.pendingReviewerId,
+    handlingEditorIds: getHandlingEditorIds(submission),
     currentUserId: userId,
-    isAssignedReviewer: submission.reviewerId === userId,
     submissionStatus: submission.status,
+    ...buildReviewerScope(submission, userId),
   };
 }
 
@@ -55,21 +61,44 @@ export function canViewSubmission(
     return true;
   }
 
-  if (roles.includes("handling_editor") && submission.handlingEditorId === userId) {
+  if (roles.includes("handling_editor") && isHandlingEditorOnSubmission(submission, userId)) {
     return true;
   }
 
   if (
     roles.includes("handling_editor") &&
     submission.status === "assigned" &&
-    !submission.handlingEditorId
+    !hasHandlingEditors(submission)
   ) {
     return true;
   }
 
   if (
     roles.includes("reviewer") &&
-    (submission.reviewerId === userId || submission.pendingReviewerId === userId)
+    isReviewerOnSubmission(submission, userId)
+  ) {
+    return true;
+  }
+
+  if (roles.includes("author") && submission.status === "payment_pending" && submission.authorId === userId) {
+    return true;
+  }
+
+  if (
+    roles.includes("handling_editor") &&
+    isHandlingEditorOnSubmission(submission, userId) &&
+    (submission.status === "production" ||
+      submission.status === "accepted" ||
+      submission.status === "scheduled" ||
+      submission.proofReady)
+  ) {
+    return true;
+  }
+
+  if (
+    roles.includes("production_editor") &&
+    (submission.status === "production" || submission.status === "accepted" || submission.proofReady) &&
+    (submission.layoutEditorId === userId || !submission.layoutEditorId)
   ) {
     return true;
   }
@@ -105,13 +134,7 @@ export function canViewSubmission(
 }
 
 const SCREENING_DECISIONS: DecisionSlug[] = ["screening-revision", "desk-reject"];
-const EIC_DECISIONS: DecisionSlug[] = ["minor-revision", "major-revision", "reject"];
-const HE_RECOMMENDATION_DECISIONS: DecisionSlug[] = [
-  "recommend-minor-revision",
-  "recommend-major-revision",
-  "recommend-reject",
-  "recommend-accept",
-];
+const HE_DECISIONS: DecisionSlug[] = ["minor-revision", "major-revision", "reject"];
 const HE_REVISION_DECISIONS: DecisionSlug[] = ["further-revision", "reject-after-revision"];
 const REVIEW_DECISIONS: DecisionSlug[] = [
   "review-minor-revision",
@@ -135,34 +158,41 @@ export function canPerformDecision(
   }
 
   if (REVIEW_DECISIONS.includes(decision)) {
+    const slot = getReviewerSlot(submission, userId);
     return (
       submission.status === "under_review" &&
-      submission.reviewerId === userId &&
-      submission.reviewerInvitationStatus === "accepted" &&
+      !!slot &&
+      slot.invitationStatus === "accepted" &&
+      !slot.reviewSubmitted &&
       canAnyRole(roles, "peer_review", "decide", scope)
     );
   }
 
-  if (EIC_DECISIONS.includes(decision)) {
+  if (HE_DECISIONS.includes(decision)) {
+    const reviewsComplete =
+      submission.status === "under_review" && isReadyForFinalEditorialDecision(submission);
+    const revisionReview =
+      submission.status === "assigned" && (submission.revisionRound ?? 0) > 0;
     return (
-      isReadyForFinalEditorialDecision(submission) &&
-      canAnyRole(roles, "editorial_decision", "decide")
-    );
-  }
-
-  if (HE_RECOMMENDATION_DECISIONS.includes(decision)) {
-    return (
-      submission.status === "under_review" &&
-      canAnyRole(roles, "editorial_recommendation", "decide", scope)
+      (reviewsComplete || revisionReview) &&
+      canAnyRole(roles, "editorial_decision", "decide", scope)
     );
   }
 
   if (HE_REVISION_DECISIONS.includes(decision)) {
-    return (
-      submission.status === "revision_required" &&
-      submission.handlingEditorId === userId &&
-      roles.includes("handling_editor")
-    );
+    if (submission.status === "assigned" && (submission.revisionRound ?? 0) > 0) {
+      return canAnyRole(roles, "editorial_decision", "decide", scope);
+    }
+    return false;
+  }
+
+  if (
+    decision === "recommend-accept" ||
+    decision === "recommend-minor-revision" ||
+    decision === "recommend-major-revision" ||
+    decision === "recommend-reject"
+  ) {
+    return false;
   }
 
   return false;

@@ -1,6 +1,6 @@
 import type { AuthUser } from "@/features/auth/storage";
 import type { Role } from "@/lib/rbac/types";
-import type { PaymentRequest, PaymentSettings } from "@/lib/store/types";
+import type { PaymentRequest, PaymentSettings, Submission } from "@/lib/store/types";
 
 export function isPureAuthor(roles: Role[]): boolean {
   return roles.includes("author") && !roles.some((role) => role !== "author");
@@ -19,14 +19,15 @@ export function getLatestPaymentForAuthor(
     .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0];
 }
 
-export function canAuthorCreateSubmission(
-  user: AuthUser,
-  payments: PaymentRequest[],
-  settings: PaymentSettings,
+export function canBeginLayoutProduction(
+  submission: Pick<Submission, "status" | "acceptancePaymentVerified" | "proofReady">,
+  paymentEnabled: boolean,
 ): boolean {
-  if (!settings.enabled) return true;
-  if (!isPureAuthor(user.roles)) return true;
-  return hasApprovedPayment(user.id, payments);
+  if (submission.proofReady) return false;
+  if (paymentEnabled) {
+    return submission.status === "production" && submission.acceptancePaymentVerified === true;
+  }
+  return submission.status === "accepted" || submission.status === "production";
 }
 
 export function formatPaymentAmount(amount: number, currency: string): string {

@@ -3,7 +3,6 @@ import {
   filterCompletedLayouts,
   filterPublishedSubmissions,
   filterSubmissionsForEditorial,
-  filterSubmissionsForPlagiarism,
   filterSubmissionsForProduction,
   filterSubmissionsForReviews,
   filterSubmissionsReadyToPublish,
@@ -33,15 +32,14 @@ const FIXTURES: Submission[] = [
   {
     id: "sub-002",
     submissionNumber: "SJMS-002",
-    title: "Screening",
+    title: "Submitted",
     abstract: "a",
     keywords: [],
     language: "English",
     articleType: "Research Article",
-    status: "administrative_review",
+    status: "submitted",
     authorId: "author-2",
     authors: [],
-    plagiarismStatus: "pending",
     files: [],
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-02T00:00:00Z",
@@ -49,12 +47,12 @@ const FIXTURES: Submission[] = [
   {
     id: "sub-011",
     submissionNumber: "SJMS-011",
-    title: "Copyediting",
+    title: "Accepted",
     abstract: "a",
     keywords: [],
     language: "English",
     articleType: "Research Article",
-    status: "copyediting",
+    status: "accepted",
     authorId: "author-3",
     authors: [],
     files: [],
@@ -72,7 +70,7 @@ const FIXTURES: Submission[] = [
     status: "production",
     authorId: "author-4",
     authors: [],
-    layoutEditorId: "user-layout",
+    layoutEditorId: "user-production",
     proofReady: true,
     files: [],
     createdAt: "2026-01-01T00:00:00Z",
@@ -101,22 +99,36 @@ describe("submissionFilters", () => {
     expect(reviews.map((s) => s.id)).toEqual(["sub-001"]);
   });
 
-  it("shows screening queue for editorial staff", () => {
-    const queue = filterSubmissionsForEditorial(FIXTURES, "user-staff", ["editorial_staff"]);
+  it("shows pending invitations from reviewers array while status is assigned", () => {
+    const reviews = filterSubmissionsForReviews(
+      [
+        {
+          ...FIXTURES[0]!,
+          id: "sub-pending",
+          status: "assigned",
+          reviewerId: undefined,
+          pendingReviewerId: undefined,
+          reviewerInvitationStatus: undefined,
+          reviewers: [{ reviewerId: "user-reviewer2", invitationStatus: "pending" }],
+        },
+      ],
+      "user-reviewer2",
+      ["reviewer"],
+    );
+    expect(reviews.map((s) => s.id)).toEqual(["sub-pending"]);
+  });
+
+  it("shows submitted queue for editor in chief", () => {
+    const queue = filterSubmissionsForEditorial(FIXTURES, "user-eic", ["editor_in_chief"]);
     expect(queue.map((s) => s.id)).toEqual(["sub-002"]);
   });
 
-  it("shows plagiarism queue", () => {
-    const queue = filterSubmissionsForPlagiarism(FIXTURES);
-    expect(queue.map((s) => s.id)).toEqual(["sub-002"]);
+  it("shows accepted and production queue for production editors", () => {
+    const pipeline = filterSubmissionsForProduction(FIXTURES, ["production_editor"], "user-production");
+    expect(pipeline.map((s) => s.id).sort()).toEqual(["sub-011", "sub-012"].sort());
   });
 
-  it("shows copyediting queue for copyeditors", () => {
-    const pipeline = filterSubmissionsForProduction(FIXTURES, ["copyeditor"]);
-    expect(pipeline.map((s) => s.id)).toEqual(["sub-011"]);
-  });
-
-  it("shows assigned and unassigned production queue for layout editors", () => {
+  it("shows assigned and unassigned production queue for production editors", () => {
     const pipeline = filterSubmissionsForProduction(
       [
         ...FIXTURES,
@@ -127,10 +139,10 @@ describe("submissionFilters", () => {
           proofReady: false,
         },
       ],
-      ["layout_editor"],
-      "user-layout",
+      ["production_editor"],
+      "user-production",
     );
-    expect(pipeline.map((s) => s.id).sort()).toEqual(["sub-012", "sub-unassigned"].sort());
+    expect(pipeline.map((s) => s.id).sort()).toEqual(["sub-011", "sub-012", "sub-unassigned"].sort());
   });
 
   it("computes layout dashboard stats", () => {
@@ -140,14 +152,14 @@ describe("submissionFilters", () => {
         {
           ...FIXTURES[3],
           id: "sub-waiting",
-          layoutEditorId: "user-layout",
+          layoutEditorId: "user-production",
           status: "production",
           proofReady: false,
         },
         {
           ...FIXTURES[3],
           id: "sub-progress",
-          layoutEditorId: "user-layout",
+          layoutEditorId: "user-production",
           status: "production",
           layoutStartedAt: "2026-01-02T00:00:00Z",
           proofReady: false,
@@ -155,31 +167,31 @@ describe("submissionFilters", () => {
         {
           ...FIXTURES[3],
           id: "sub-done",
-          layoutEditorId: "user-layout",
+          layoutEditorId: "user-production",
           status: "production",
           proofReady: true,
           proofApproved: true,
         },
       ],
-      "user-layout",
+      "user-production",
     );
     expect(stats.assigned).toBeGreaterThanOrEqual(3);
     expect(stats.completed).toBeGreaterThanOrEqual(1);
   });
 
-  it("filters completed layouts for layout editor", () => {
+  it("filters completed layouts for production editor", () => {
     const completed = filterCompletedLayouts(
       [
         {
           ...FIXTURES[3],
           id: "sub-done",
-          layoutEditorId: "user-layout",
+          layoutEditorId: "user-production",
           status: "production",
           proofApproved: true,
         },
       ],
-      "user-layout",
-      ["layout_editor"],
+      "user-production",
+      ["production_editor"],
     );
     expect(completed.map((s) => s.id)).toEqual(["sub-done"]);
   });

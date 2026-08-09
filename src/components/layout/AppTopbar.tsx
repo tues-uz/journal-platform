@@ -1,19 +1,10 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Bell, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { UserAvatar } from "@/components/shared/UserAvatar";
-import { Badge } from "@/components/ui/badge";
+import { BreadcrumbNav, type BreadcrumbItemDef } from "@/components/layout/BreadcrumbNav";
 import { useAuth } from "@/features/auth/useAuth";
+import { useSidebarLayout } from "@/features/layout/useSidebarLayout";
 import { notificationsApi } from "@/lib/api/notifications";
 import { ROLE_LABELS } from "@/lib/rbac/types";
 import { routes } from "@/app/routes";
@@ -21,72 +12,83 @@ import { routes } from "@/app/routes";
 export { NAV_ITEMS, type NavItemDef } from "@/lib/rbac/navItems";
 
 interface AppTopbarProps {
-  title?: string;
+  breadcrumbs?: BreadcrumbItemDef[];
 }
 
-export function AppTopbar({ title }: AppTopbarProps) {
-  const { user, logout } = useAuth();
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+export function AppTopbar({ breadcrumbs }: AppTopbarProps) {
+  const { user } = useAuth();
+  const { toggleCollapsed } = useSidebarLayout();
   const { data: notifications = [] } = useQuery({
     queryKey: ["notifications"],
     queryFn: () => notificationsApi.list(),
     enabled: !!user,
   });
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const primaryRole = user?.roles[0];
+  const roleLabel = primaryRole ? ROLE_LABELS[primaryRole] : "Member";
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-gray-200 h-16 flex items-center px-6 gap-4">
-      {title && <h1 className="text-lg font-semibold text-gray-900 hidden sm:block">{title}</h1>}
-      <div className="flex-1 max-w-md ml-auto">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search submissions, authors..."
-            className="pl-9 rounded-xl bg-gray-50 border-gray-200"
-          />
+    <header className="z-40 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background">
+      <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={toggleCollapsed}
+          className="-ml-1 hidden size-7 hover:bg-muted hover:text-foreground lg:inline-flex"
+          aria-label="Toggle sidebar"
+          title="Toggle sidebar"
+        >
+          <PanelLeft className="h-4 w-4" />
+        </Button>
+        {breadcrumbs && breadcrumbs.length > 0 && <BreadcrumbNav items={breadcrumbs} />}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2.5 px-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative size-8 text-muted-foreground hover:bg-muted hover:text-foreground"
+          asChild
+        >
+          <Link to={routes.notifications} aria-label="Notifications" title="Notifications">
+            <Bell className="h-4 w-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </Link>
+        </Button>
+
+        <div className="hidden min-w-0 flex-col items-end gap-0.5 md:flex">
+          <div className="flex max-w-[16rem] items-center gap-1.5">
+            <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold leading-none text-foreground">
+              {roleLabel}
+            </span>
+            <p className="truncate text-xs font-medium text-foreground">{user?.name}</p>
+          </div>
+          <p className="max-w-[16rem] truncate text-[11px] text-muted-foreground">{user?.email}</p>
+        </div>
+
+        <div
+          className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-teal-500 to-emerald-600"
+          aria-hidden="true"
+        >
+          <span className="text-xs font-semibold text-white">
+            {getInitials(user?.name ?? "U") || "U"}
+          </span>
         </div>
       </div>
-      <Button variant="ghost" size="icon" className="relative rounded-xl" asChild>
-        <Link to={routes.notifications}>
-          <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
-              {unreadCount}
-            </Badge>
-          )}
-        </Link>
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="gap-2 rounded-xl">
-            <UserAvatar
-              name={user?.name ?? "User"}
-              avatarUrl={user?.avatarUrl}
-              className="h-8 w-8"
-              fallbackClassName="text-sm"
-            />
-            <span className="text-sm font-medium hidden md:inline">{user?.name}</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56 rounded-xl">
-          <DropdownMenuLabel>
-            <div className="flex flex-col">
-              <span>{user?.name}</span>
-              <span className="text-xs font-normal text-gray-500">{user?.email}</span>
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {user?.roles.map((role) => (
-            <DropdownMenuItem key={role} disabled className="text-xs text-gray-500">
-              {ROLE_LABELS[role]}
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link to={routes.profile}>Profile</Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
     </header>
   );
 }

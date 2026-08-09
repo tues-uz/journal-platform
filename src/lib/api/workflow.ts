@@ -1,11 +1,14 @@
 import { apiRequest } from "@/lib/api/client";
 import { mapSubmissionDto, type SubmissionDto } from "@/lib/api/submissions";
+import { isDemoMode } from "@/lib/demo/mode";
 import type { Submission } from "@/lib/store/types";
 
 async function call(path: string, body?: unknown): Promise<Submission> {
   const dto = await apiRequest<SubmissionDto>(path, { method: "POST", body });
   return mapSubmissionDto(dto);
 }
+
+export type HePrescreenDecision = "SEND_TO_REVIEW" | "RETURN" | "DESK_REJECT";
 
 export type ScreeningDecision = "APPROVE" | "REQUEST_REVISION" | "DESK_REJECT";
 export type DecisionSlug =
@@ -27,12 +30,17 @@ export const workflowApi = {
     return call(`/api/submissions/${id}/screening`, { decision, reason });
   },
 
-  assignEditor(id: string, editorId: string) {
-    return call(`/api/submissions/${id}/assign-editor`, { editorId: Number(editorId) });
+  assignEditor(id: string, editorIds: string | string[]) {
+    const ids = Array.isArray(editorIds) ? editorIds : [editorIds];
+    return call(`/api/submissions/${id}/assign-editor`, {
+      editorIds: isDemoMode() ? ids : ids.map((editorId) => Number(editorId)),
+    });
   },
 
   inviteReviewer(id: string, reviewerId: string) {
-    return call(`/api/submissions/${id}/invite-reviewer`, { reviewerId: Number(reviewerId) });
+    return call(`/api/submissions/${id}/invite-reviewer`, {
+      reviewerId: isDemoMode() ? reviewerId : Number(reviewerId),
+    });
   },
 
   respondToInvitation(id: string, accept: boolean) {
@@ -49,6 +57,26 @@ export const workflowApi = {
 
   decide(id: string, decision: DecisionSlug, reason?: string) {
     return call(`/api/submissions/${id}/decision`, { decision, reason });
+  },
+
+  hePrescreen(id: string, decision: HePrescreenDecision, reason?: string) {
+    return call(`/api/submissions/${id}/he-prescreen`, { decision, reason });
+  },
+
+  submitRevision(id: string) {
+    return call(`/api/submissions/${id}/submit-revision`);
+  },
+
+  approveEicRevision(id: string, notes?: string) {
+    return call(`/api/submissions/${id}/eic-revision/approve`, { notes });
+  },
+
+  requestFurtherEicRevision(id: string, reason?: string) {
+    return call(`/api/submissions/${id}/eic-revision/request-further`, { reason });
+  },
+
+  schedulePublication(id: string, scheduledAt: string) {
+    return call(`/api/submissions/${id}/schedule`, { scheduledAt });
   },
 
   startCopyediting(id: string) {
@@ -74,8 +102,8 @@ export const workflowApi = {
   publish(id: string, doi?: string, volumeId?: string, issueId?: string) {
     return call(`/api/submissions/${id}/publish`, {
       doi,
-      volumeId: volumeId ? Number(volumeId) : undefined,
-      issueId: issueId ? Number(issueId) : undefined,
+      volumeId: volumeId ? (isDemoMode() ? volumeId : Number(volumeId)) : undefined,
+      issueId: issueId ? (isDemoMode() ? issueId : Number(issueId)) : undefined,
     });
   },
 

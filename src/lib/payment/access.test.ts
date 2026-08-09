@@ -1,36 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { AuthUser } from "@/features/auth/storage";
 import {
-  canAuthorCreateSubmission,
+  canBeginLayoutProduction,
   hasApprovedPayment,
   isPureAuthor,
 } from "@/lib/payment/access";
-import type { PaymentRequest, PaymentSettings } from "@/lib/store/types";
-
-const baseSettings: PaymentSettings = {
-  enabled: true,
-  amount: 500000,
-  currency: "IDR",
-  bankName: "Bank Mandiri",
-  accountName: "TUES Journal Press",
-  accountNumber: "1234567890",
-  updatedAt: "2026-07-01T09:00:00Z",
-  updatedBy: "user-admin",
-};
-
-const authorUser: AuthUser = {
-  id: "author-1",
-  name: "Test Author",
-  email: "author@test.com",
-  roles: ["author"],
-};
-
-const staffAuthorUser: AuthUser = {
-  id: "staff-1",
-  name: "Staff Author",
-  email: "staff@test.com",
-  roles: ["author", "editorial_staff"],
-};
+import type { PaymentRequest } from "@/lib/store/types";
 
 const approvedPayment: PaymentRequest = {
   id: "pay-1",
@@ -76,22 +50,36 @@ describe("hasApprovedPayment", () => {
   });
 });
 
-describe("canAuthorCreateSubmission", () => {
-  it("allows pure authors with approved payment", () => {
-    expect(canAuthorCreateSubmission(authorUser, [approvedPayment], baseSettings)).toBe(true);
-  });
-
-  it("blocks pure authors without approved payment when enabled", () => {
-    expect(canAuthorCreateSubmission(authorUser, [], baseSettings)).toBe(false);
-  });
-
-  it("allows pure authors when payment gate is disabled", () => {
+describe("canBeginLayoutProduction", () => {
+  it("requires verified production status when payments are enabled", () => {
     expect(
-      canAuthorCreateSubmission(authorUser, [], { ...baseSettings, enabled: false }),
+      canBeginLayoutProduction(
+        { status: "production", acceptancePaymentVerified: true, proofReady: false },
+        true,
+      ),
     ).toBe(true);
+
+    expect(
+      canBeginLayoutProduction(
+        { status: "payment_pending", acceptancePaymentVerified: false, proofReady: false },
+        true,
+      ),
+    ).toBe(false);
+
+    expect(
+      canBeginLayoutProduction(
+        { status: "production", acceptancePaymentVerified: false, proofReady: false },
+        true,
+      ),
+    ).toBe(false);
   });
 
-  it("allows staff who also hold author role without payment", () => {
-    expect(canAuthorCreateSubmission(staffAuthorUser, [], baseSettings)).toBe(true);
+  it("allows accepted manuscripts when payments are disabled", () => {
+    expect(
+      canBeginLayoutProduction(
+        { status: "accepted", acceptancePaymentVerified: false, proofReady: false },
+        false,
+      ),
+    ).toBe(true);
   });
 });

@@ -36,7 +36,12 @@ const CONFIRM_PHRASES = {
 } as const;
 
 /** Maps the UI's decision-page slug to the real backend call. */
-function submitDecision(id: string, slug: UiDecisionSlug, reason: string): Promise<unknown> {
+function submitDecision(
+  id: string,
+  slug: UiDecisionSlug,
+  reason: string,
+  submissionStatus?: string,
+): Promise<unknown> {
   switch (slug) {
     case "screening-revision":
       return workflowApi.screen(id, "REQUEST_REVISION" as ScreeningDecision, reason);
@@ -49,6 +54,9 @@ function submitDecision(id: string, slug: UiDecisionSlug, reason: string): Promi
     case "reject":
       return workflowApi.decide(id, "REJECT" as DecisionSlug, reason);
     case "further-revision":
+      if (submissionStatus === "eic_approval_pending") {
+        return workflowApi.requestFurtherEicRevision(id, reason);
+      }
       return workflowApi.decide(id, "FURTHER_REVISION" as DecisionSlug, reason);
     case "reject-after-revision":
       return workflowApi.decide(id, "REJECT_AFTER_REVISION" as DecisionSlug, reason);
@@ -135,9 +143,10 @@ const SubmissionDecisionPage = () => {
         await uploadSubmissionFiles(submission.id, imageFiles, "DECISION_FEEDBACK", { feedbackKind });
       }
 
-      await submitDecision(submission.id, validDecision, reason.trim());
+      await submitDecision(submission.id, validDecision, reason.trim(), submission.status);
 
       void queryClient.invalidateQueries({ queryKey: ["submission", submission.id] });
+      void queryClient.invalidateQueries({ queryKey: ["submission-activities", submission.id] });
       void queryClient.invalidateQueries({ queryKey: ["submissions"] });
 
       toast({

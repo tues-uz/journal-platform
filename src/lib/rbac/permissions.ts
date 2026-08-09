@@ -11,6 +11,7 @@ const matrix: Record<Module, Partial<Record<Role, PermissionSet>>> = {
     reviewer: { view: true, edit: true },
     copyeditor: { view: true, edit: true },
     layout_editor: { view: true, edit: true },
+    production_editor: { view: true, edit: true },
     publisher_admin: { view: true, create: true, edit: true, assign: true },
   },
   submission: {
@@ -21,17 +22,18 @@ const matrix: Record<Module, Partial<Record<Role, PermissionSet>>> = {
     reviewer: { view: true },
     publisher_admin: { view: true, assign: true },
   },
+  editor_assignment: {
+    editor_in_chief: { view: true, assign: true },
+    publisher_admin: { view: true, assign: true },
+  },
   admin_screening: {
     editorial_staff: { view: true, edit: true, decide: true },
     publisher_admin: { view: true },
   },
   plagiarism: {
     editorial_staff: { view: true, edit: true, decide: true },
+    editor_in_chief: { view: true, edit: true, decide: true },
     publisher_admin: { view: true },
-  },
-  editor_assignment: {
-    editor_in_chief: { view: true, assign: true },
-    publisher_admin: { view: true, assign: true },
   },
   reviewer_assignment: {
     handling_editor: { view: true, assign: true },
@@ -55,20 +57,29 @@ const matrix: Record<Module, Partial<Record<Role, PermissionSet>>> = {
   },
   editorial_decision: {
     author: { view: "scoped" },
-    editor_in_chief: { view: true, decide: true },
+    editor_in_chief: { view: true },
+    handling_editor: { view: true, decide: "scoped" },
     publisher_admin: { view: true, decide: true },
   },
   editorial_recommendation: {
     handling_editor: { view: true, decide: "scoped" },
+    publisher_admin: { view: true },
+  },
+  he_prescreening: {
+    handling_editor: { view: true, decide: "scoped" },
     editor_in_chief: { view: true },
     publisher_admin: { view: true },
+  },
+  eic_revision_approval: {
+    editor_in_chief: { view: true, decide: true },
+    publisher_admin: { view: true, decide: true },
   },
   copyediting: {
     copyeditor: { view: true, create: true, edit: true, decide: true },
     publisher_admin: { view: true },
   },
   layout_production: {
-    layout_editor: { view: true, create: true, edit: true, decide: true },
+    handling_editor: { view: true, create: true, edit: true, decide: "scoped" },
     publisher_admin: { view: true },
   },
   proofreading: {
@@ -80,6 +91,7 @@ const matrix: Record<Module, Partial<Record<Role, PermissionSet>>> = {
   },
   publication: {
     author: { view: "scoped" },
+    handling_editor: { view: "scoped", edit: "scoped" },
     publisher_admin: { view: true, edit: true, publish: true },
   },
   doi_management: {

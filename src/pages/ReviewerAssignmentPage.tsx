@@ -7,6 +7,7 @@ import { SubmissionListTable } from "@/components/shared/SubmissionListTable";
 import { useAuth } from "@/features/auth/useAuth";
 import { submissionsApi } from "@/lib/api/submissions";
 import { buildUserDirectory } from "@/lib/api/userDirectory";
+import { isHandlingEditorOnSubmission } from "@/lib/workflow/handlingEditors";
 import { routes } from "@/app/routes";
 
 export default function ReviewerAssignmentPage() {
@@ -25,7 +26,7 @@ export default function ReviewerAssignmentPage() {
     return submissions
       .filter(
         (s) =>
-          s.handlingEditorId === user.id &&
+          isHandlingEditorOnSubmission(s, user.id) &&
           (s.status === "assigned" || s.status === "under_review") &&
           !s.reviewerId,
       )

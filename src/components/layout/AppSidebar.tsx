@@ -1,14 +1,36 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookOpen, LogOut, Menu, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { BookOpen, LogOut, Menu, Bell, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import { useSidebarLayout } from "@/features/layout/useSidebarLayout";
-import { getVisibleNavItems } from "@/lib/rbac/navItems";
+import { getVisibleNavItems, type NavItemDef } from "@/lib/rbac/navItems";
 import { ROLE_LABELS } from "@/lib/rbac/types";
 import { routes } from "@/app/routes";
+
+const ACCOUNT_PATHS = new Set([
+  routes.notifications,
+  routes.profile,
+  routes.settings,
+  routes.payment,
+  routes.payments,
+]);
+
+function groupNavItems(items: NavItemDef[]) {
+  const overview = items.filter((item) => item.path === routes.dashboard);
+  const account = items.filter((item) => ACCOUNT_PATHS.has(item.path));
+  const workflow = items.filter(
+    (item) => item.path !== routes.dashboard && !ACCOUNT_PATHS.has(item.path),
+  );
+  return { overview, workflow, account };
+}
+
+function getPrimaryRoleLabel(roles: string[]) {
+  const primary = roles[0];
+  return primary ? ROLE_LABELS[primary as keyof typeof ROLE_LABELS] : "Member";
+}
 
 export function AppSidebar() {
   const location = useLocation();
@@ -20,6 +42,7 @@ export function AppSidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const visibleItems = getVisibleNavItems(user?.roles ?? [], can);
+  const sections = useMemo(() => groupNavItems(visibleItems), [visibleItems]);
 
   const isActive = (path: string) => {
     if (path === routes.dashboard) return location.pathname === routes.dashboard;
@@ -31,102 +54,155 @@ export function AppSidebar() {
     navigate(routes.signin);
   };
 
+  const renderNavLink = (item: NavItemDef) => {
+    const Icon = item.icon;
+    const active = isActive(item.path);
+    return (
+      <Link
+        key={`${item.path}:${item.labelKey}`}
+        to={item.path}
+        onClick={() => setIsMobileOpen(false)}
+        title={isCollapsed ? t(item.labelKey) : undefined}
+        className={`flex w-full items-center gap-2 overflow-hidden rounded-md px-2 text-left text-sm outline-none transition-colors h-8 ${
+          active
+            ? "bg-teal-50 font-medium text-teal-800"
+            : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        } ${isCollapsed ? "justify-center px-0" : ""}`}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        {!isCollapsed && <span className="truncate">{t(item.labelKey)}</span>}
+      </Link>
+    );
+  };
+
+  const renderSection = (labelKey: string, items: NavItemDef[]) => {
+    if (items.length === 0) return null;
+    return (
+      <div className="relative flex w-full min-w-0 flex-col px-0 py-1">
+        {!isCollapsed && (
+          <div className="flex h-7 shrink-0 items-center px-2 text-xs font-medium text-muted-foreground">
+            {t(labelKey)}
+          </div>
+        )}
+        <div className="flex w-full flex-col gap-0.5">{items.map(renderNavLink)}</div>
+      </div>
+    );
+  };
+
+  const sidebarWidth = isCollapsed ? "w-20" : "w-64";
+
   return (
     <>
-      <div className="lg:hidden fixed top-4 left-4 z-50">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setIsMobileOpen(!isMobileOpen)}
-          className="bg-white rounded-xl"
-        >
-          {isMobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
-      </div>
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background shadow-sm lg:hidden">
+        <div className="mx-auto flex h-14 items-center justify-between px-4">
+          <Link
+            to={routes.dashboard}
+            className="flex items-center gap-2"
+            onClick={() => setIsMobileOpen(false)}
+          >
+            <span className="flex size-8 items-center justify-center rounded-lg bg-teal-600 text-white">
+              <BookOpen className="h-4 w-4" />
+            </span>
+            <span className="text-sm font-semibold tracking-tight">SJMS</span>
+          </Link>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              asChild
+            >
+              <Link to={routes.notifications} aria-label="Notifications">
+                <Bell className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={() => setIsMobileOpen(!isMobileOpen)}
+              aria-label="Toggle menu"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
+      </header>
 
       {isMobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          className="fixed inset-0 z-[55] bg-black/50 lg:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
       <aside
-        className={`fixed left-0 top-0 h-screen bg-white border-r border-gray-200 z-40 transition-all duration-300 ${
-          isCollapsed ? "w-20" : "w-56"
-        } ${isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+        className={`fixed top-0 left-0 z-[60] h-screen border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 ${sidebarWidth} ${
+          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        } lg:z-30`}
       >
-        <div className="flex flex-col h-full">
-          <div className="p-4 relative">
+        <div className="flex h-full flex-col">
+          <div className="relative flex min-h-14 items-center px-2 py-2">
             <Link
               to={routes.dashboard}
-              className={`flex items-center gap-2 ${isCollapsed ? "justify-center" : ""}`}
+              className={`flex min-h-0 flex-1 items-center gap-2 px-2 ${isCollapsed ? "justify-center px-0" : ""}`}
               onClick={() => setIsMobileOpen(false)}
             >
-              <BookOpen className="h-6 w-6 text-blue-600 flex-shrink-0" />
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-600 text-white">
+                <BookOpen className="h-4 w-4" />
+              </span>
               {!isCollapsed && (
-                <span className="text-lg font-semibold text-gray-900">SJMS</span>
+                <div className="grid min-w-0 flex-1 text-left leading-tight">
+                  <span className="truncate text-sm font-semibold text-foreground">SJMS</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {getPrimaryRoleLabel(user?.roles ?? [])} Dashboard
+                  </span>
+                </div>
               )}
             </Link>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleCollapsed}
-              className="hidden lg:flex h-8 w-8 rounded-full absolute top-4 -right-4 border border-gray-200 bg-white z-10"
-            >
-              {isCollapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
-            </Button>
           </div>
 
-          {!isCollapsed && user && (
-            <div className="px-4 pb-4">
-              <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-              <p className="text-xs text-gray-500 truncate">
-                {user.roles.map((r) => ROLE_LABELS[r]).join(", ")}
-              </p>
-            </div>
-          )}
-
-          <nav className="flex-1 overflow-y-auto px-3">
-            <div className="space-y-1">
-              {visibleItems.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.path);
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setIsMobileOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
-                      active
-                        ? "bg-blue-600 text-white"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}
-                  >
-                    <Icon
-                      className={`h-5 w-5 flex-shrink-0 ${active ? "text-white" : "text-gray-500"}`}
-                    />
-                    {!isCollapsed && (
-                      <span className="text-sm font-medium">{t(item.labelKey)}</span>
-                    )}
-                  </Link>
-                );
-              })}
+          <nav className="flex-1 overflow-y-auto px-2 py-1">
+            <div className="flex flex-col gap-1">
+              {renderSection("nav.sections.overview", sections.overview)}
+              {renderSection("nav.sections.workflow", sections.workflow)}
+              {renderSection("nav.sections.account", sections.account)}
             </div>
           </nav>
 
-          <div className="p-3">
+          <div className="px-2 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] lg:pb-3">
+            {!isCollapsed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleCollapsed}
+                className="mb-2 hidden h-8 w-full justify-start gap-2 rounded-md px-2 text-sm font-normal text-sidebar-foreground/80 hover:bg-sidebar-accent lg:inline-flex"
+                aria-label="Collapse sidebar"
+              >
+                <PanelLeft className="h-4 w-4 shrink-0" />
+                <span className="truncate">Collapse</span>
+              </Button>
+            )}
+            {isCollapsed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleCollapsed}
+                className="mb-2 hidden h-8 w-full justify-center rounded-md text-sidebar-foreground/80 hover:bg-sidebar-accent lg:inline-flex"
+                aria-label="Expand sidebar"
+              >
+                <PanelLeft className="h-4 w-4" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               onClick={handleLogout}
-              className="w-full justify-start text-gray-700 hover:bg-gray-100 rounded-xl"
+              className={`h-8 w-full gap-2 rounded-md px-2 text-sm font-normal text-sidebar-foreground/80 hover:bg-rose-50 hover:text-rose-700 ${
+                isCollapsed ? "justify-center px-0" : "justify-start"
+              }`}
             >
-              <LogOut className="h-5 w-5 mr-3 flex-shrink-0" />
-              {!isCollapsed && <span className="text-sm font-medium">{t("common.logout")}</span>}
+              <LogOut className="h-4 w-4 shrink-0" />
+              {!isCollapsed && <span className="truncate">{t("common.logout")}</span>}
             </Button>
           </div>
         </div>

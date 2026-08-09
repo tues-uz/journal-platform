@@ -1,6 +1,6 @@
-import { MapPin } from "lucide-react";
+import { CircleDot, UserRound } from "lucide-react";
 import { RoleChip } from "@/components/shared/RoleChip";
-import { StatusBadge } from "@/components/shared/StatusBadge";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 import type { Role } from "@/lib/rbac/types";
 import type { Submission } from "@/lib/store/types";
 import { getSubmissionAssignee, shouldRevealParticipantName, WORKFLOW_STAGE_LABELS } from "@/lib/workflow/submissionActions";
@@ -48,31 +48,55 @@ export function SubmissionPositionSummary({
 
   const primaryRole = assignee.roles[0];
   const showName = shouldRevealParticipantName(assignee.roles);
+  const stageLabel = WORKFLOW_STAGE_LABELS[submission.status] ?? "In progress";
 
   return (
     <div
       className={cn(
-        "rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/80 to-white p-4",
+        "rounded-lg border border-border/80 bg-card p-5",
         className,
       )}
     >
-      <div className="flex items-center gap-2 text-blue-700 mb-3">
-        <MapPin className="h-4 w-4 flex-shrink-0" />
-        <span className="text-xs font-semibold uppercase tracking-wide">Where your submission is now</span>
-      </div>
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          {primaryRole && <RoleChip role={primaryRole} className="px-2.5 py-1 text-sm" />}
-          <div className="min-w-0">
-            {showName && (
-              <p className="text-base font-semibold text-gray-900 truncate">{assignee.name}</p>
-            )}
-            <p className={cn("font-semibold text-gray-900", showName ? "text-sm text-gray-500" : "text-base")}>
-              {WORKFLOW_STAGE_LABELS[submission.status] ?? "In progress"}
-            </p>
+      <div className="grid gap-5 sm:grid-cols-2 sm:gap-8">
+        <div className="flex gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-orange-200/80 bg-orange-50/80">
+            <CircleDot className="h-4 w-4 text-orange-600" strokeWidth={2} />
+          </div>
+          <div className="min-w-0 space-y-0.5">
+            <p className="text-xs font-medium text-muted-foreground">Current stage</p>
+            <p className="text-sm font-semibold tracking-tight text-foreground">{stageLabel}</p>
           </div>
         </div>
-        <StatusBadge status={submission.status} className="self-start sm:self-center" />
+
+        <div className="flex gap-3 border-t border-border/60 pt-5 sm:border-t-0 sm:pt-0">
+          {showName ? (
+            <UserAvatar
+              name={assignee.name}
+              className="h-10 w-10 shrink-0"
+              fallbackClassName="text-sm font-medium"
+            />
+          ) : (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/40">
+              <UserRound className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
+            </div>
+          )}
+          <div className="min-w-0 space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Current position</p>
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 text-sm">
+              <span className="text-muted-foreground">{assignee.prefix}</span>
+              {showName ? (
+                <>
+                  <span className="font-medium text-foreground">{assignee.name}</span>
+                  {primaryRole ? <RoleChip role={primaryRole} /> : null}
+                </>
+              ) : primaryRole ? (
+                <RoleChip role={primaryRole} />
+              ) : (
+                <span className="font-medium text-foreground">{assignee.name}</span>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

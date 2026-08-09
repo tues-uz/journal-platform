@@ -2,13 +2,14 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { routes } from "@/app/routes";
 import type { Role } from "@/lib/rbac/types";
-import { SEED_DATA, SEED_VERSION, repairProductionAssignments, stripSeedDemoData } from "@/lib/store/seed";
+import { SEED_DATA, SEED_VERSION, mergeMissingSeedStaff, repairProductionAssignments, repairUnpaidProductionSubmissions, stripSeedDemoData } from "@/lib/store/seed";
 import type {
   ActivityEntry,
   Notification,
   PaymentProofFile,
   PaymentRequest,
   PaymentSettings,
+  ReviewerAssignment,
   StoreUser,
   Submission,
   SubmissionFile,
@@ -16,6 +17,9 @@ import type {
   Volume,
   Issue,
 } from "@/lib/store/types";
+import { MIN_REVIEWERS } from "@/lib/store/types";
+import { getReviewerSlots } from "@/lib/workflow/reviewers";
+import { getHandlingEditorIds } from "@/lib/workflow/handlingEditors";
 import { getPublicationFiles } from "@/lib/files/submissionFiles";
 
 interface StoreActions {
@@ -85,6 +89,32 @@ interface StoreActions {
     actorName: string,
     comments?: string,
     feedbackFiles?: SubmissionFile[],
+  ) => void;
+  hePrescreen: (
+    submissionId: string,
+    decision: "send_to_review" | "return" | "desk_reject",
+    actorId: string,
+    actorName: string,
+    reason?: string,
+  ) => void;
+  submitAuthorRevision: (submissionId: string, actorId: string, actorName: string) => void;
+  approveEicRevision: (
+    submissionId: string,
+    actorId: string,
+    actorName: string,
+    notes?: string,
+  ) => void;
+  requestFurtherEicRevision: (
+    submissionId: string,
+    actorId: string,
+    actorName: string,
+    reason?: string,
+  ) => void;
+  schedulePublication: (
+    submissionId: string,
+    scheduledAt: string,
+    actorId: string,
+    actorName: string,
   ) => void;
   sendForProof: (submissionId: string, actorId: string, actorName: string) => boolean;
   assignLayoutEditor: (
@@ -273,25 +303,65 @@ export const useJournalStore = create<JournalStore>()(
       assignHandlingEditor: (submissionId, editorId, actorId, actorName) => {
         const editor = get().users.find((u) => u.id === editorId);
         const actor = get().users.find((u) => u.id === actorId);
-        get().updateSubmission(submissionId, { handlingEditorId: editorId });
+        const submission = get().submissions.find((s) => s.id === submissionId);
+        if (!submission) return;
+
+        const existingIds = submission.handlingEditorIds?.length
+          ? submission.handlingEditorIds
+          : submission.handlingEditorId
+            ? [submission.handlingEditorId]
+            : [];
+        if (existingIds.includes(editorId)) return;
+
+        const nextIds = [...existingIds, editorId];
+        get().updateSubmission(submissionId, {
+          handlingEditorIds: nextIds,
+          handlingEditorId: nextIds[0],
+        });
         get().addActivity({
           submissionId,
           action: "Handling Editor Assigned",
           actorId,
           actorName,
           actorRoles: actor?.roles,
-          details: editor ? "Handling editor assigned" : undefined,
+          statusAfter:
+            existingIds.length === 0 && submission.status === "submitted" ? "assigned" : undefined,
+          details: editor ? `Handling editor assigned: ${editor.name}` : undefined,
           timestamp: new Date().toISOString(),
         });
+        if (editor) {
+          get().addNotification({
+            userId: editor.id,
+            title: "Handling Editor Assignment",
+            message: `You have been assigned as a handling editor for ${submission.submissionNumber}.`,
+            read: false,
+            createdAt: new Date().toISOString(),
+            link: `/dashboard/submissions/${submissionId}`,
+          });
+        }
       },
 
       assignReviewer: (submissionId, reviewerId, actorId, actorName) => {
         const reviewer = get().users.find((u) => u.id === reviewerId);
         const actor = get().users.find((u) => u.id === actorId);
+        const submission = get().submissions.find((s) => s.id === submissionId);
+        if (!submission) return;
+
+        const slots = getReviewerSlots(submission);
+        if (slots.some((s) => s.reviewerId === reviewerId)) return;
+
+        const activeSlots = slots.filter((slot) => slot.invitationStatus !== "declined");
+        if (activeSlots.length >= MIN_REVIEWERS) return;
+
+        const nextSlots: ReviewerAssignment[] = [
+          ...slots,
+          { reviewerId, invitationStatus: "pending" },
+        ];
+
         get().updateSubmission(submissionId, {
+          reviewers: nextSlots,
           pendingReviewerId: reviewerId,
           reviewerInvitationStatus: "pending",
-          reviewSubmitted: false,
         });
         get().addActivity({
           submissionId,
@@ -317,20 +387,39 @@ export const useJournalStore = create<JournalStore>()(
       respondToReviewerInvitation: (submissionId, reviewerId, accept) => {
         const submission = get().submissions.find((s) => s.id === submissionId);
         const reviewer = get().users.find((u) => u.id === reviewerId);
-        if (
-          !submission ||
-          submission.pendingReviewerId !== reviewerId ||
-          submission.reviewerInvitationStatus !== "pending"
-        ) {
-          return;
+        if (!submission) return;
+
+        const slots = getReviewerSlots(submission);
+        const slotIndex = slots.findIndex(
+          (s) => s.reviewerId === reviewerId && s.invitationStatus === "pending",
+        );
+        if (slotIndex === -1 && submission.pendingReviewerId !== reviewerId) return;
+
+        const updatedSlots = [...slots];
+        if (slotIndex >= 0) {
+          updatedSlots[slotIndex] = {
+            ...updatedSlots[slotIndex]!,
+            invitationStatus: accept ? "accepted" : "declined",
+          };
+        } else if (accept) {
+          updatedSlots.push({ reviewerId, invitationStatus: "accepted" });
         }
+
+        const acceptedCount = updatedSlots.filter((s) => s.invitationStatus === "accepted").length;
+        const nextStatus =
+          accept && acceptedCount >= MIN_REVIEWERS && submission.status === "assigned"
+            ? "under_review"
+            : submission.status;
+        const nextPending = updatedSlots.find((slot) => slot.invitationStatus === "pending");
 
         if (accept) {
           get().updateSubmission(submissionId, {
-            reviewerId,
-            pendingReviewerId: undefined,
-            reviewerInvitationStatus: "accepted",
-            status: "under_review",
+            reviewers: updatedSlots,
+            reviewerId: submission.reviewerId ?? reviewerId,
+            pendingReviewerId: nextPending?.reviewerId,
+            reviewerInvitationStatus: nextPending ? "pending" : "accepted",
+            status: nextStatus,
+            reviewSubmitted: false,
           });
           get().addActivity({
             submissionId,
@@ -338,13 +427,14 @@ export const useJournalStore = create<JournalStore>()(
             actorId: reviewerId,
             actorName: reviewer?.name ?? "Reviewer",
             actorRoles: reviewer?.roles,
-            statusAfter: "under_review",
+            statusAfter: nextStatus,
             timestamp: new Date().toISOString(),
           });
         } else {
           get().updateSubmission(submissionId, {
-            pendingReviewerId: undefined,
-            reviewerInvitationStatus: "declined",
+            reviewers: updatedSlots,
+            pendingReviewerId: nextPending?.reviewerId,
+            reviewerInvitationStatus: nextPending ? "pending" : "declined",
           });
           get().addActivity({
             submissionId,
@@ -491,11 +581,45 @@ export const useJournalStore = create<JournalStore>()(
         const actor = get().users.find((u) => u.id === actorId);
         const trimmedComments = comments?.trim();
         const submission = get().submissions.find((s) => s.id === submissionId);
+        if (!submission) return;
+
+        const slots = getReviewerSlots(submission);
+        const slotIndex = slots.findIndex(
+          (s) => s.reviewerId === actorId && s.invitationStatus === "accepted",
+        );
+        const updatedSlots =
+          slotIndex >= 0
+            ? slots.map((s, i) =>
+                i === slotIndex
+                  ? {
+                      ...s,
+                      reviewSubmitted: true,
+                      recommendation,
+                      comments: trimmedComments,
+                    }
+                  : s,
+              )
+            : [
+                ...slots,
+                {
+                  reviewerId: actorId,
+                  invitationStatus: "accepted" as const,
+                  reviewSubmitted: true,
+                  recommendation,
+                  comments: trimmedComments,
+                },
+              ];
+
+        const allDone = updatedSlots
+          .filter((s) => s.invitationStatus === "accepted")
+          .every((s) => s.reviewSubmitted);
+
         get().updateSubmission(submissionId, {
-          reviewSubmitted: true,
-          ...(trimmedComments ? { reviewComments: trimmedComments } : {}),
+          reviewers: updatedSlots,
+          reviewSubmitted: allDone && updatedSlots.filter((s) => s.invitationStatus === "accepted").length >= MIN_REVIEWERS,
+          ...(trimmedComments && !submission.reviewComments ? { reviewComments: trimmedComments } : {}),
           ...(feedbackFiles?.length
-            ? { files: [...(submission?.files ?? []), ...feedbackFiles] }
+            ? { files: [...(submission.files ?? []), ...feedbackFiles] }
             : {}),
         });
         get().addActivity({
@@ -507,6 +631,137 @@ export const useJournalStore = create<JournalStore>()(
           details: trimmedComments
             ? `Recommendation: ${recommendation.replace(/_/g, " ")}. Comments: ${trimmedComments}`
             : `Recommendation: ${recommendation.replace(/_/g, " ")}`,
+          timestamp: new Date().toISOString(),
+        });
+      },
+
+      hePrescreen: (submissionId, decision, actorId, actorName, reason) => {
+        const actor = get().users.find((u) => u.id === actorId);
+        const trimmedReason = reason?.trim();
+        if (decision === "send_to_review") {
+          get().updateSubmission(submissionId, { hePrescreenComplete: true });
+          get().addActivity({
+            submissionId,
+            action: "HE Pre-Screening Passed",
+            actorId,
+            actorName,
+            actorRoles: actor?.roles,
+            details: trimmedReason,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+        if (decision === "desk_reject") {
+          get().updateSubmissionStatus(
+            submissionId,
+            "rejected",
+            actorId,
+            actorName,
+            "Desk rejected at HE pre-screening",
+            trimmedReason,
+          );
+          return;
+        }
+        get().updateSubmissionStatus(
+          submissionId,
+          "revision_required",
+          actorId,
+          actorName,
+          "Returned for technical correction",
+          trimmedReason,
+        );
+      },
+
+      submitAuthorRevision: (submissionId, actorId, actorName) => {
+        const actor = get().users.find((u) => u.id === actorId);
+        const submission = get().submissions.find((s) => s.id === submissionId);
+        const round = (submission?.revisionRound ?? 0) + 1;
+        get().updateSubmissionStatus(
+          submissionId,
+          "assigned",
+          actorId,
+          actorName,
+          `Revision submitted (round ${round})`,
+        );
+        get().updateSubmission(submissionId, { revisionRound: round });
+        if (submission) {
+          for (const editorId of getHandlingEditorIds(submission)) {
+            get().addNotification({
+              userId: editorId,
+              title: "Author Revision Submitted",
+              message: `${submission.submissionNumber} has a new author revision ready for your review.`,
+              read: false,
+              createdAt: new Date().toISOString(),
+              link: `/dashboard/submissions/${submissionId}`,
+            });
+          }
+        }
+        get().addActivity({
+          submissionId,
+          action: "Revision Submitted to Handling Editor",
+          actorId,
+          actorName,
+          actorRoles: actor?.roles,
+          statusAfter: "assigned",
+          timestamp: new Date().toISOString(),
+        });
+      },
+
+      approveEicRevision: (submissionId, actorId, actorName, notes) => {
+        const submission = get().submissions.find((s) => s.id === submissionId);
+        const actor = get().users.find((u) => u.id === actorId);
+        const targetStatus = submission?.editorRecommendation === "accept" ? "accepted" : "under_review";
+        get().updateSubmissionStatus(
+          submissionId,
+          targetStatus,
+          actorId,
+          actorName,
+          notes?.trim() || "EiC approved author revision",
+        );
+        get().addActivity({
+          submissionId,
+          action: "EiC Approved Revision",
+          actorId,
+          actorName,
+          actorRoles: actor?.roles,
+          statusAfter: targetStatus,
+          details: notes?.trim(),
+          timestamp: new Date().toISOString(),
+        });
+        if (submission) {
+          get().addNotification({
+            userId: submission.authorId,
+            title: "Revision Approved",
+            message: `The Editor in Chief approved your revision for ${submission.submissionNumber}.`,
+            read: false,
+            createdAt: new Date().toISOString(),
+            link: `/dashboard/submissions/${submissionId}`,
+          });
+        }
+      },
+
+      requestFurtherEicRevision: (submissionId, actorId, actorName, reason) => {
+        get().updateSubmissionStatus(
+          submissionId,
+          "revision_required",
+          actorId,
+          actorName,
+          "EiC requested further revision",
+          reason,
+        );
+      },
+
+      schedulePublication: (submissionId, scheduledAt, actorId, actorName) => {
+        const actor = get().users.find((u) => u.id === actorId);
+        get().updateSubmission(submissionId, { scheduledAt, status: "scheduled" });
+        get().addActivity({
+          submissionId,
+          action: "Publication Scheduled",
+          actorId,
+          actorName,
+          actorRoles: actor?.roles,
+          statusAfter: "scheduled",
+          details: scheduledAt,
           timestamp: new Date().toISOString(),
         });
       },
@@ -563,7 +818,7 @@ export const useJournalStore = create<JournalStore>()(
         });
         get().addActivity({
           submissionId,
-          action: "Assigned to Layout Editor",
+          action: "Assigned to Production Editor",
           actorId,
           actorName,
           actorRoles: actor?.roles,
@@ -586,7 +841,20 @@ export const useJournalStore = create<JournalStore>()(
       startLayout: (submissionId, editorId, actorName) => {
         const submission = get().submissions.find((s) => s.id === submissionId);
         const editor = get().users.find((u) => u.id === editorId);
-        if (!submission || submission.status !== "production" || submission.proofReady) {
+        const paymentEnabled = get().paymentSettings.enabled;
+
+        if (!submission || submission.proofReady) {
+          return false;
+        }
+
+        if (paymentEnabled) {
+          if (
+            submission.status !== "production" ||
+            submission.acceptancePaymentVerified !== true
+          ) {
+            return false;
+          }
+        } else if (!["accepted", "production"].includes(submission.status)) {
           return false;
         }
 
@@ -599,6 +867,7 @@ export const useJournalStore = create<JournalStore>()(
 
         const now = new Date().toISOString();
         get().updateSubmission(submissionId, {
+          ...(submission.status === "accepted" ? { status: "production" as const } : {}),
           layoutEditorId: submission.layoutEditorId ?? editorId,
           layoutAssignedAt: submission.layoutAssignedAt ?? now,
           layoutStartedAt: now,
@@ -695,9 +964,24 @@ export const useJournalStore = create<JournalStore>()(
         const submission = get().submissions.find((s) => s.id === id);
         const now = new Date().toISOString();
 
+        let resolvedStatus =
+          status === "accepted" && submission && get().paymentSettings.enabled
+            ? "payment_pending"
+            : status;
+
+        const handlingEditorId = submission ? getHandlingEditorIds(submission)[0] : undefined;
+        const layoutAssigneeId = submission?.layoutEditorId ?? handlingEditorId;
+
         get().updateSubmission(id, {
-          status,
-          ...(status === "published" ? { publishedAt: now } : {}),
+          status: resolvedStatus,
+          ...(resolvedStatus === "production"
+            ? {
+                acceptancePaymentVerified: true,
+                layoutEditorId: layoutAssigneeId,
+                layoutAssignedAt: submission?.layoutAssignedAt ?? now,
+              }
+            : {}),
+          ...(resolvedStatus === "published" ? { publishedAt: now } : {}),
           ...(needsReason && trimmedReason ? { decisionReason: trimmedReason } : {}),
           ...(feedbackFiles?.length
             ? { files: [...(submission?.files ?? []), ...feedbackFiles] }
@@ -705,14 +989,25 @@ export const useJournalStore = create<JournalStore>()(
         });
         get().addActivity({
           submissionId: id,
-          action: `Status changed to ${status.replace(/_/g, " ")}`,
+          action: `Status changed to ${resolvedStatus.replace(/_/g, " ")}`,
           actorId,
           actorName,
           actorRoles: actor?.roles,
-          statusAfter: status,
+          statusAfter: resolvedStatus,
           timestamp: now,
           details: trimmedReason ? `${details ?? ""}${details ? ". " : ""}Reason: ${trimmedReason}` : details,
         });
+
+        if (resolvedStatus === "payment_pending" && submission) {
+          get().addNotification({
+            userId: submission.authorId,
+            title: "Manuscript Approved — Payment Required",
+            message: `Your manuscript ${submission.submissionNumber} was approved. Please submit your publication fee to continue.`,
+            read: false,
+            createdAt: now,
+            link: routes.payment,
+          });
+        }
 
         if (needsReason && submission) {
           get().addNotification({
@@ -729,36 +1024,16 @@ export const useJournalStore = create<JournalStore>()(
           });
         }
 
-        if (status === "accepted" && submission) {
-          get()
-            .users.filter((u) => u.status === "active" && u.roles.includes("copyeditor"))
-            .forEach((copyeditor) => {
-              get().addNotification({
-                userId: copyeditor.id,
-                title: "Copyediting Queue",
-                message: `${submission.submissionNumber} has been accepted and awaits copyediting.`,
-                read: false,
-                createdAt: now,
-                link: routes.submissionById(id),
-              });
-            });
-        }
-
-        if (status === "production" && submission) {
+        if (resolvedStatus === "production" && submission && layoutAssigneeId) {
           if (!submission.layoutEditorId) {
-            const layoutEditor = get().users.find(
-              (u) => u.status === "active" && u.roles.includes("layout_editor"),
-            );
-            if (layoutEditor) {
-              get().assignLayoutEditor(id, layoutEditor.id, actorId, actorName);
-            }
+            get().assignLayoutEditor(id, layoutAssigneeId, actorId, actorName);
           } else {
-            const layoutEditor = get().users.find((u) => u.id === submission.layoutEditorId);
-            if (layoutEditor) {
+            const assignedEditor = get().users.find((u) => u.id === layoutAssigneeId);
+            if (assignedEditor) {
               get().addNotification({
-                userId: layoutEditor.id,
-                title: "Layout Queue",
-                message: `${submission.submissionNumber} copyedited manuscript is ready for layout.`,
+                userId: assignedEditor.id,
+                title: "Ready for Layout",
+                message: `${submission.submissionNumber} is ready for layout and production.`,
                 read: false,
                 createdAt: now,
                 link: routes.submissionById(id),
@@ -796,13 +1071,11 @@ export const useJournalStore = create<JournalStore>()(
         const author = state.users.find((u) => u.id === authorId);
         if (!author) return { success: false, error: "Author not found." };
 
-        const hasBlocking = state.payments.some(
-          (payment) =>
-            payment.authorId === authorId &&
-            (payment.status === "pending_review" || payment.status === "approved"),
+        const hasPendingReview = state.payments.some(
+          (payment) => payment.authorId === authorId && payment.status === "pending_review",
         );
-        if (hasBlocking) {
-          return { success: false, error: "You already have a pending or approved payment." };
+        if (hasPendingReview) {
+          return { success: false, error: "You already have a payment proof awaiting review." };
         }
 
         const payment: PaymentRequest = {
@@ -883,11 +1156,41 @@ export const useJournalStore = create<JournalStore>()(
         get().addNotification({
           userId: author.id,
           title: "Payment Approved",
-          message: "Your payment has been approved. You can now submit manuscripts.",
+          message: "Your publication payment proof was approved.",
           read: false,
           createdAt: reviewedAt,
-          link: "/dashboard/submissions/new",
+          link: routes.payment,
         });
+
+        state.submissions
+          .filter((s) => s.authorId === author.id && s.status === "payment_pending")
+          .forEach((s) => {
+            const handlingEditorId = getHandlingEditorIds(s)[0];
+            get().updateSubmission(s.id, {
+              status: "production",
+              acceptancePaymentVerified: true,
+              layoutEditorId: s.layoutEditorId ?? handlingEditorId,
+              layoutAssignedAt: s.layoutAssignedAt ?? reviewedAt,
+            });
+            get().addNotification({
+              userId: author.id,
+              title: "Payment Verified",
+              message: `${s.submissionNumber} is cleared for layout after payment verification.`,
+              read: false,
+              createdAt: reviewedAt,
+              link: routes.submissionById(s.id),
+            });
+            if (handlingEditorId) {
+              get().addNotification({
+                userId: handlingEditorId,
+                title: "Ready for Layout",
+                message: `${s.submissionNumber} is ready for layout and production.`,
+                read: false,
+                createdAt: reviewedAt,
+                link: routes.submissionById(s.id),
+              });
+            }
+          });
 
         return true;
       },
@@ -968,7 +1271,8 @@ export const useJournalStore = create<JournalStore>()(
           const state = persistedState as Partial<typeof SEED_DATA>;
           const base =
             version >= 2
-              ? repairProductionAssignments(
+              ? repairUnpaidProductionSubmissions(
+                  repairProductionAssignments(
                   stripSeedDemoData({
                   ...SEED_DATA,
                   ...state,
@@ -981,9 +1285,13 @@ export const useJournalStore = create<JournalStore>()(
                   payments: state.payments ?? SEED_DATA.payments,
                   paymentSettings: state.paymentSettings ?? SEED_DATA.paymentSettings,
                 } as typeof SEED_DATA),
+                ),
                 )
-              : repairProductionAssignments({ ...SEED_DATA });
-          return base;
+              : repairUnpaidProductionSubmissions(repairProductionAssignments({ ...SEED_DATA }));
+          return {
+            ...base,
+            users: mergeMissingSeedStaff(base.users),
+          };
         }
         return persistedState as typeof SEED_DATA;
       },

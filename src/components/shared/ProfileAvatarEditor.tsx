@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { Camera, Trash2 } from "lucide-react";
+import { Camera } from "lucide-react";
+import { RoleChipList } from "@/components/shared/RoleChip";
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/useAuth";
@@ -12,9 +13,10 @@ const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 interface ProfileAvatarEditorProps {
   size?: "md" | "lg";
+  showRoles?: boolean;
 }
 
-export function ProfileAvatarEditor({ size = "md" }: ProfileAvatarEditorProps) {
+export function ProfileAvatarEditor({ size = "md", showRoles = false }: ProfileAvatarEditorProps) {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -57,7 +59,10 @@ export function ProfileAvatarEditor({ size = "md" }: ProfileAvatarEditorProps) {
         description: "Your new photo is now visible across the app.",
       });
     } catch (err) {
-      const message = err instanceof ApiClientError ? err.message : "We couldn't update your profile picture. Please try again.";
+      const message =
+        err instanceof ApiClientError
+          ? err.message
+          : "We couldn't update your profile picture. Please try again.";
       toast({
         title: "Upload failed",
         description: message,
@@ -79,7 +84,10 @@ export function ProfileAvatarEditor({ size = "md" }: ProfileAvatarEditorProps) {
         description: "Your initials will be shown instead.",
       });
     } catch (err) {
-      const message = err instanceof ApiClientError ? err.message : "We couldn't remove your profile picture. Please try again.";
+      const message =
+        err instanceof ApiClientError
+          ? err.message
+          : "We couldn't remove your profile picture. Please try again.";
       toast({
         title: "Removal failed",
         description: message,
@@ -93,8 +101,8 @@ export function ProfileAvatarEditor({ size = "md" }: ProfileAvatarEditorProps) {
   if (!user) return null;
 
   return (
-    <div className="flex items-center gap-4">
-      <div className="relative">
+    <div className="flex items-start gap-4">
+      <div className="relative shrink-0">
         <UserAvatar
           name={user.name}
           avatarUrl={avatarUrl}
@@ -105,7 +113,7 @@ export function ProfileAvatarEditor({ size = "md" }: ProfileAvatarEditorProps) {
           type="button"
           size="icon"
           variant="secondary"
-          className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full shadow-sm"
+          className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full border border-border/80 shadow-sm"
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
         >
@@ -119,33 +127,37 @@ export function ProfileAvatarEditor({ size = "md" }: ProfileAvatarEditorProps) {
           onChange={handleAvatarChange}
         />
       </div>
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-gray-900">Profile picture</p>
-        <p className="text-xs text-gray-500">JPG, PNG, or WebP up to 2 MB.</p>
-        <div className="flex flex-wrap gap-2">
-          <Button
+
+      <div className="min-w-0 space-y-1 pt-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium text-foreground">{user.name}</p>
+          {showRoles && user.roles.length > 0 ? <RoleChipList roles={user.roles} /> : null}
+        </div>
+        <p className="text-xs text-muted-foreground">JPG, PNG, or WebP up to 2 MB.</p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
+          <button
             type="button"
-            variant="outline"
-            size="sm"
-            className="rounded-lg"
+            className="text-sm text-foreground underline-offset-4 hover:underline disabled:opacity-50"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
           >
-            {isUploading ? "Uploading..." : "Change photo"}
-          </Button>
-          {avatarUrl && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50"
-              onClick={handleRemoveAvatar}
-              disabled={isUploading}
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Remove
-            </Button>
-          )}
+            {isUploading ? "Uploading…" : "Change photo"}
+          </button>
+          {avatarUrl ? (
+            <>
+              <span className="text-muted-foreground/40" aria-hidden>
+                ·
+              </span>
+              <button
+                type="button"
+                className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
+                onClick={handleRemoveAvatar}
+                disabled={isUploading}
+              >
+                Remove
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     </div>

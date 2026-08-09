@@ -1,4 +1,6 @@
 import { apiRequest } from "@/lib/api/client";
+import { isDemoMode } from "@/lib/demo/mode";
+import { readFileAsDataUrl } from "@/lib/files/submissionFiles";
 import type { SubmissionFile } from "@/lib/store/types";
 
 interface PresignedUploadResponse {
@@ -63,18 +65,32 @@ export async function uploadSubmissionFile(
     },
   });
 
-  const putRes = await fetch(presigned.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
-    body: file,
-  });
-  if (!putRes.ok) {
-    throw new Error(`Upload to storage failed (${putRes.status})`);
+  if (!isDemoMode()) {
+    const putRes = await fetch(presigned.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+    if (!putRes.ok) {
+      throw new Error(`Upload to storage failed (${putRes.status})`);
+    }
+  }
+
+  const completeBody: Record<string, unknown> = {
+    key: presigned.key,
+    filename: file.name,
+    type,
+    format: options?.format,
+    feedbackKind: options?.feedbackKind,
+  };
+  if (isDemoMode()) {
+    completeBody.size = file.size;
+    completeBody.dataUrl = await readFileAsDataUrl(file);
   }
 
   const dto = await apiRequest<SubmissionFileDto>(`/api/submissions/${submissionId}/files/complete`, {
     method: "POST",
-    body: { key: presigned.key, filename: file.name, type, format: options?.format, feedbackKind: options?.feedbackKind },
+    body: completeBody,
   });
   return mapFileDto(dto);
 }

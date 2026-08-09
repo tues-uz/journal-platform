@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { ArrowLeft, Bookmark, Clock, Share2 } from "lucide-react";
-import JournalHeader from "@/components/JournalHeader";
-import Footer from "@/components/Footer";
+import PublicJournalLayout from "@/components/layout/PublicJournalLayout";
 import { PdfViewer } from "@/components/shared/PdfViewer";
 import { DocxViewer } from "@/components/shared/DocxViewer";
 import { routes } from "@/app/routes";
@@ -10,6 +9,8 @@ import {
   buildArticleBody,
   getLandingArticleById,
 } from "@/lib/landing/articles";
+import { buildIssueArticleBody, getIssueArticleById } from "@/lib/journal/issueArticles";
+import { ArticleReferences } from "@/components/journal/ArticleReferences";
 import { formatPublicArticleDate } from "@/lib/store/publicArticles";
 import { publicArticlesApi } from "@/lib/api/publicArticles";
 
@@ -33,60 +34,70 @@ const ArticlePage = () => {
   const { id = "" } = useParams();
 
   const landingArticle = getLandingArticleById(id);
+  const issueArticle = getIssueArticleById(id);
 
   const { data: publishedArticle, isLoading } = useQuery({
     queryKey: ["public-article", id],
     queryFn: () => publicArticlesApi.get(id),
-    enabled: !!id && !landingArticle,
+    enabled: !!id && !landingArticle && !issueArticle,
   });
 
-  if (!landingArticle && isLoading) {
+  if (!landingArticle && !issueArticle && isLoading) {
     return (
-      <div className="min-h-screen bg-white">
-        <JournalHeader />
-        <main className="pt-24 pb-16">
-          <div className="mx-auto max-w-3xl px-6 text-center text-gray-500">Loading article…</div>
-        </main>
-      </div>
+      <PublicJournalLayout>
+        <div className="text-center text-gray-500 py-12">Loading article…</div>
+      </PublicJournalLayout>
     );
   }
 
-  if (!landingArticle && !publishedArticle) {
+  if (!landingArticle && !issueArticle && !publishedArticle) {
     return <Navigate to="/404" replace />;
   }
 
-  const title = landingArticle?.title ?? publishedArticle!.title;
-  const author = landingArticle?.author ?? publishedArticle!.author;
+  const title = landingArticle?.title ?? issueArticle?.title ?? publishedArticle!.title;
+  const author =
+    landingArticle?.author ?? issueArticle?.authors ?? publishedArticle!.author;
   const authorRole =
-    landingArticle?.authorRole ?? publishedArticle!.authorInstitution ?? "Author";
+    landingArticle?.authorRole ??
+    issueArticle?.category ??
+    publishedArticle!.authorInstitution ??
+    "Author";
   const authorAvatar = landingArticle?.authorAvatar;
   const image = landingArticle?.image;
-  const category = landingArticle?.category ?? publishedArticle!.category;
+  const category = landingArticle?.category ?? issueArticle?.category ?? publishedArticle!.category;
   const readTime = landingArticle?.readTime;
-  const date = landingArticle?.date ?? formatPublicArticleDate(publishedArticle!.publishedAt);
-  const excerpt = landingArticle?.excerpt ?? publishedArticle!.excerpt;
-  const keywords = publishedArticle?.keywords ?? [];
-  const doi = publishedArticle?.doi;
-  const volumeIssueLabel = publishedArticle?.volumeIssueLabel;
+  const date =
+    landingArticle?.date ??
+    (issueArticle
+      ? formatPublicArticleDate(issueArticle.publishedAt)
+      : formatPublicArticleDate(publishedArticle!.publishedAt));
+  const excerpt =
+    landingArticle?.excerpt ?? issueArticle?.abstract ?? publishedArticle!.excerpt;
+  const keywords = issueArticle?.keywords ?? publishedArticle?.keywords ?? [];
+  const doi = issueArticle?.doi ?? publishedArticle?.doi;
+  const volumeIssueLabel = issueArticle?.issueLabel ?? publishedArticle?.volumeIssueLabel;
   const submissionNumber = publishedArticle?.submissionNumber;
-  const manuscriptFile = publishedArticle?.manuscriptFile;
+  const issueManuscriptFile = issueArticle
+    ? { kind: "pdf" as const, url: issueArticle.pdfUrl, fileName: `${issueArticle.id}.pdf` }
+    : undefined;
+  const manuscriptFile = publishedArticle?.manuscriptFile ?? issueManuscriptFile;
   const hasManuscript = Boolean(manuscriptFile);
+  const references = issueArticle?.references ?? [];
   const body = hasManuscript
     ? []
-    : buildArticleBody({
-        title,
-        excerpt,
-        author,
-        category,
-        authorRole,
-      });
+    : issueArticle
+      ? buildIssueArticleBody(issueArticle)
+      : buildArticleBody({
+          title,
+          excerpt,
+          author,
+          category,
+          authorRole,
+        });
 
   return (
-    <div className="min-h-screen bg-white">
-      <JournalHeader />
-
-      <main className="pt-24 pb-16">
-        <div className={`mx-auto px-6 ${hasManuscript ? "max-w-5xl" : "max-w-3xl"}`}>
+    <PublicJournalLayout>
+      <div className={`mx-auto ${hasManuscript ? "max-w-5xl" : "max-w-3xl"}`}>
           <Link
             to={routes.home}
             className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-8 transition-colors"
@@ -106,6 +117,9 @@ const ArticlePage = () => {
               </span>
             )}
             {volumeIssueLabel && <span>{volumeIssueLabel}</span>}
+            {issueArticle && doi && (
+              <span className="font-mono text-xs">{doi.replace("https://doi.org/", "doi:")}</span>
+            )}
             {manuscriptFile?.kind === "pdf" && (
               <span className="px-2 py-0.5 rounded bg-red-50 text-red-700 text-xs font-semibold">
                 PDF
@@ -118,7 +132,7 @@ const ArticlePage = () => {
             )}
           </div>
 
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-8">
+          <h1 className="mb-8 font-serif text-3xl font-bold tracking-wide text-black leading-[1.15] md:text-4xl md:leading-[1.12] lg:text-[2.75rem] lg:leading-[1.1]">
             {title}
           </h1>
 
@@ -176,7 +190,7 @@ const ArticlePage = () => {
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-900 mb-3">
                   Abstract
                 </h2>
-                <p className="text-gray-700 leading-relaxed text-lg">{excerpt}</p>
+                <p className="text-base leading-relaxed text-gray-700">{excerpt}</p>
               </section>
 
               {manuscriptFile!.kind === "pdf" ? (
@@ -194,16 +208,18 @@ const ArticlePage = () => {
               )}
             </div>
           ) : (
-            <article className="prose prose-lg max-w-none">
+            <article className="prose max-w-none">
               {body.map((paragraph, index) => (
-                <p key={index} className="text-gray-800 leading-relaxed mb-6 text-lg">
+                <p key={index} className="mb-6 text-base leading-relaxed text-gray-800">
                   {paragraph}
                 </p>
               ))}
             </article>
           )}
 
-          {(keywords.length > 0 || doi) && (
+          {references.length > 0 && <ArticleReferences references={references} />}
+
+          {!issueArticle && (keywords.length > 0 || doi) && (
             <div className="mt-12 pt-8 border-t border-gray-200 space-y-4">
               {keywords.length > 0 && (
                 <div>
@@ -228,10 +244,7 @@ const ArticlePage = () => {
             </div>
           )}
         </div>
-      </main>
-
-      <Footer />
-    </div>
+    </PublicJournalLayout>
   );
 };
 

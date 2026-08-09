@@ -26,23 +26,19 @@ export default function ProductionPage() {
     enabled: !!user,
   });
 
-  // Volumes/issues aren't wired to the real publication API yet, so this
-  // display-only lookup still reads the mock store.
   const volumes = useJournalStore((s) => s.volumes);
   const journalSettings = useJournalStore((s) => s.journalSettings);
   const getUserById = useMemo(() => buildUserDirectory(submissions), [submissions]);
 
-  const isLayoutEditor =
-    can("layout_production", "view") && !can("copyediting", "view");
+  const isHandlingEditor =
+    can("layout_production", "view") && user?.roles.includes("handling_editor");
   const isPublisher = user?.roles.includes("publisher_admin") ?? false;
 
   const pageTitle = isPublisher
     ? "Production Pipeline"
-    : can("copyediting", "view") && !can("layout_production", "view")
-      ? "Copyediting Queue"
-      : isLayoutEditor
-        ? "Assigned Articles"
-        : "Production";
+    : isHandlingEditor
+      ? "Production Queue"
+      : "Production";
 
   const pipeline = useMemo(() => {
     if (!user) return [];
@@ -51,18 +47,18 @@ export default function ProductionPage() {
     );
   }, [submissions, user]);
 
-  const copyeditingCount = pipeline.filter((s) => s.status === "copyediting").length;
   const productionCount = pipeline.filter((s) => s.status === "production").length;
+  const acceptedCount = pipeline.filter((s) => s.status === "accepted").length;
 
   return (
     <AuthenticatedLayout
       title={pageTitle}
       breadcrumbs={[{ label: "Dashboard", href: routes.dashboard }, { label: pageTitle }]}
     >
-      {pipeline.length > 0 && !isLayoutEditor && (
+      {pipeline.length > 0 && !isHandlingEditor && (
         <div className="mb-4 flex flex-wrap gap-3">
           <Badge variant="secondary" className="rounded-lg px-3 py-1">
-            {copyeditingCount} in copyediting
+            {acceptedCount} accepted, awaiting production
           </Badge>
           <Badge variant="secondary" className="rounded-lg px-3 py-1">
             {productionCount} in layout/production
@@ -79,14 +75,14 @@ export default function ProductionPage() {
       {pipeline.length === 0 ? (
         <EmptyState
           icon={Factory}
-          title={isLayoutEditor ? "No assigned articles" : "No production tasks"}
+          title={isHandlingEditor ? "No assigned articles" : "No production tasks"}
           description={
-            isLayoutEditor
-              ? "Articles assigned to you for layout will appear here."
-              : "Accepted manuscripts entering copyediting or layout will appear here."
+            isHandlingEditor
+              ? "Manuscripts cleared for layout after payment will appear here."
+              : "Accepted manuscripts entering production will appear here."
           }
         />
-      ) : isLayoutEditor ? (
+      ) : isHandlingEditor ? (
         <LayoutAssignedArticlesTable
           submissions={pipeline}
           journalShortName={journalSettings.shortName}
@@ -116,9 +112,9 @@ export default function ProductionPage() {
             ...(isPublisher
               ? [
                   {
-                    header: "Layout Editor",
+                    header: "Production Editor",
                     cell: (sub: (typeof pipeline)[0]) =>
-                      sub.status !== "production"
+                      sub.status !== "production" && sub.status !== "accepted"
                         ? "—"
                         : (sub.layoutEditorName ?? "Unclaimed"),
                   },

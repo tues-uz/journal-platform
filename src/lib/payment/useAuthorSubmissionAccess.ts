@@ -27,12 +27,10 @@ export function useAuthorSubmissionAccess() {
     (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
   )[0];
 
-  const hasApprovedPayment = ownPayments.some((p) => p.status === "approved");
-  const needsPayment = paymentGated && !hasApprovedPayment;
-
   return {
-    canCreateSubmission: can("submission", "create") && !needsPayment,
-    needsPayment,
+    canCreateSubmission: can("submission", "create"),
+    /** Submission is free; APC is paid after acceptance (see payment_pending). */
+    needsPayment: false,
     paymentSettings,
     latestPayment,
   };

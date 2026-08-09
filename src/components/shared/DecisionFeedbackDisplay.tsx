@@ -1,18 +1,39 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Submission, SubmissionFile } from "@/lib/store/types";
+import { cn } from "@/lib/utils";
 
 function FeedbackImages({ files }: { files: SubmissionFile[] }) {
   const images = files.filter((f) => f.dataUrl);
   if (images.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {images.map((file) => (
-        <figure key={file.id} className="rounded-xl overflow-hidden border bg-white">
-          <img src={file.dataUrl} alt={file.name} className="w-full h-32 object-cover" />
-          <figcaption className="px-2 py-1 text-xs text-gray-500 truncate">{file.name}</figcaption>
+        <figure key={file.id} className="overflow-hidden rounded-md border border-border/80 bg-muted/20">
+          <img src={file.dataUrl} alt={file.name} className="h-28 w-full object-cover" />
+          <figcaption className="truncate px-2 py-1.5 text-xs text-muted-foreground">
+            {file.name}
+          </figcaption>
         </figure>
       ))}
+    </div>
+  );
+}
+
+function FeedbackBlock({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("mb-6 overflow-hidden rounded-lg border border-border/80 bg-card", className)}>
+      <div className="border-b border-border/60 px-4 py-3">
+        <p className="text-sm font-medium text-foreground">{title}</p>
+      </div>
+      <div className="space-y-4 px-4 py-4">{children}</div>
     </div>
   );
 }
@@ -25,52 +46,26 @@ export function DecisionFeedbackDisplay({ submission }: DecisionFeedbackDisplayP
   const decisionFiles = submission.files.filter(
     (f) => f.type === "decision_feedback" && f.feedbackKind === "decision",
   );
-  const reviewFiles = submission.files.filter(
-    (f) => f.type === "decision_feedback" && f.feedbackKind === "review",
-  );
 
   const showDecision =
     (submission.status === "revision_required" || submission.status === "rejected") &&
     (submission.decisionReason || decisionFiles.length > 0);
 
-  if (!showDecision && !submission.reviewComments && reviewFiles.length === 0) return null;
+  if (!showDecision) return null;
 
   return (
     <>
       {showDecision && (
-        <Card
-          className={`rounded-xl shadow-sm mb-6 ${
-            submission.status === "rejected"
-              ? "border-red-200 bg-red-50/50"
-              : "border-amber-200 bg-amber-50/50"
-          }`}
+        <FeedbackBlock
+          title={submission.status === "rejected" ? "Rejection feedback" : "Revision request"}
         >
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              {submission.status === "rejected" ? "Rejection Feedback" : "Revision Request"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {submission.decisionReason && (
-              <p className="text-sm text-gray-800 whitespace-pre-wrap">{submission.decisionReason}</p>
-            )}
-            <FeedbackImages files={decisionFiles} />
-          </CardContent>
-        </Card>
-      )}
-
-      {(submission.reviewComments || reviewFiles.length > 0) && (
-        <Card className="rounded-xl shadow-sm border-purple-200 bg-purple-50/50 mb-6">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Reviewer Comments</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {submission.reviewComments && (
-              <p className="text-sm text-gray-800 whitespace-pre-wrap">{submission.reviewComments}</p>
-            )}
-            <FeedbackImages files={reviewFiles} />
-          </CardContent>
-        </Card>
+          {submission.decisionReason ? (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+              {submission.decisionReason}
+            </p>
+          ) : null}
+          <FeedbackImages files={decisionFiles} />
+        </FeedbackBlock>
       )}
     </>
   );

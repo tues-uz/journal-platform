@@ -40,7 +40,7 @@ const SubmissionEditPage = () => {
   const [abstract, setAbstract] = useState(submission?.abstract ?? "");
   const [keywords, setKeywords] = useState(submission?.keywords.join(", ") ?? "");
   const [language, setLanguage] = useState(submission?.language ?? "English");
-  const [articleType, setArticleType] = useState(submission?.articleType ?? "Research Article");
+  const [articleType, setArticleType] = useState(submission?.articleType ?? "Original Manuscript");
   const [manuscriptFiles, setManuscriptFiles] = useState<UploadedFileMeta[]>([]);
 
   if (!can("submission", "edit")) {
@@ -83,8 +83,7 @@ const SubmissionEditPage = () => {
     await saveDraft();
     const now = new Date().toISOString();
     updateSubmission(submission.id, {
-      status: "administrative_review",
-      plagiarismStatus: "pending",
+      status: "submitted",
     });
     addActivity({
       submissionId: submission.id,
@@ -92,22 +91,22 @@ const SubmissionEditPage = () => {
       actorId: user.id,
       actorName: user.name,
       actorRoles: user.roles,
-      statusAfter: "administrative_review",
+      statusAfter: "submitted",
       timestamp: now,
     });
     users
-      .filter((u) => u.status === "active" && u.roles.includes("editorial_staff"))
-      .forEach((staff) => {
+      .filter((u) => u.status === "active" && u.roles.includes("editor_in_chief"))
+      .forEach((eic) => {
         useJournalStore.getState().addNotification({
-          userId: staff.id,
-          title: "New Submission for Screening",
-          message: `${submission.submissionNumber} requires administrative screening.`,
+          userId: eic.id,
+          title: "New Submission",
+          message: `${submission.submissionNumber} is ready for editor assignment.`,
           read: false,
           createdAt: now,
           link: routes.submissionById(submission.id),
         });
       });
-    toast({ title: "Manuscript submitted for screening" });
+    toast({ title: "Manuscript submitted" });
     navigate(routes.submissionById(submission.id));
   };
 
@@ -150,9 +149,9 @@ const SubmissionEditPage = () => {
               <Select value={articleType} onValueChange={setArticleType}>
                 <SelectTrigger className="rounded-xl mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Research Article">Research Article</SelectItem>
-                  <SelectItem value="Review Article">Review Article</SelectItem>
-                  <SelectItem value="Case Study">Case Study</SelectItem>
+                  <SelectItem value="Original Manuscript">Original Manuscript</SelectItem>
+                  <SelectItem value="Invited Manuscript">Invited Manuscript</SelectItem>
+                  <SelectItem value="Book Review">Book Review</SelectItem>
                 </SelectContent>
               </Select>
             </div>

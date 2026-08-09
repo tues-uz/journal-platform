@@ -19,22 +19,11 @@ describe("getVisibleNavItems", () => {
     ]);
   });
 
-  it("shows PRD-aligned nav for editorial staff", () => {
-    const items = getVisibleNavItems(["editorial_staff"], canForRoles(["editorial_staff"]));
-    expect(items.map((item) => item.labelKey)).toEqual([
-      "nav.dashboard",
-      "nav.screening",
-      "nav.plagiarism",
-      "nav.notifications",
-    ]);
-  });
-
   it("shows PRD-aligned nav for editor in chief", () => {
     const items = getVisibleNavItems(["editor_in_chief"], canForRoles(["editor_in_chief"]));
     expect(items.map((item) => item.labelKey)).toEqual([
       "nav.dashboard",
       "nav.allSubmissions",
-      "nav.editorialDecision",
       "nav.notifications",
     ]);
   });
@@ -44,6 +33,7 @@ describe("getVisibleNavItems", () => {
     expect(items.map((item) => item.labelKey)).toEqual([
       "nav.dashboard",
       "nav.assignedSubmissions",
+      "nav.productionQueue",
       "nav.reviewerAssignment",
       "nav.reviewMonitoring",
       "nav.notifications",
@@ -59,23 +49,9 @@ describe("getVisibleNavItems", () => {
     ]);
   });
 
-  it("shows PRD-aligned nav for copyeditors", () => {
-    const items = getVisibleNavItems(["copyeditor"], canForRoles(["copyeditor"]));
-    expect(items.map((item) => item.labelKey)).toEqual([
-      "nav.dashboard",
-      "nav.copyeditingQueue",
-      "nav.notifications",
-    ]);
-  });
-
-  it("shows PRD-aligned nav for layout editors", () => {
-    const items = getVisibleNavItems(["layout_editor"], canForRoles(["layout_editor"]));
-    expect(items.map((item) => item.labelKey)).toEqual([
-      "nav.dashboard",
-      "nav.layoutQueue",
-      "nav.productionFiles",
-      "nav.notifications",
-    ]);
+  it("shows minimal nav for legacy production editors", () => {
+    const items = getVisibleNavItems(["production_editor"], canForRoles(["production_editor"]));
+    expect(items.map((item) => item.labelKey)).toEqual(["nav.dashboard", "nav.notifications"]);
   });
 
   it("shows PRD-aligned nav for publisher admin", () => {
@@ -106,8 +82,14 @@ describe("RBAC can()", () => {
     expect(canRole("editor_in_chief", "admin_screening", "decide")).toBe(false);
   });
 
-  it("allows editorial staff plagiarism check", () => {
-    expect(canRole("editorial_staff", "plagiarism", "decide")).toBe(true);
+  it("allows handling editor layout access when scoped", () => {
+    expect(
+      canRole("handling_editor", "layout_production", "decide", {
+        currentUserId: "user-he",
+        handlingEditorId: "user-he",
+        handlingEditorIds: ["user-he"],
+      }),
+    ).toBe(true);
   });
 
   it("allows publisher admin full user management", () => {
