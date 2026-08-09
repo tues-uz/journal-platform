@@ -1,17 +1,21 @@
 import type { Role } from "@/lib/rbac/types";
 import type { Submission, SubmissionStatus } from "@/lib/store/types";
+import { getHandlingEditorIds, hasHandlingEditors, isHandlingEditorOnSubmission } from "@/lib/workflow/handlingEditors";
 
 export const STATUS_OWNER_ROLES: Record<SubmissionStatus, Role[]> = {
   draft: ["author"],
-  submitted: ["editorial_staff"],
-  administrative_review: ["editorial_staff"],
+  submitted: ["editor_in_chief"],
+  administrative_review: ["editor_in_chief"],
   assigned: ["handling_editor"],
   under_review: ["reviewer"],
   revision_required: ["author"],
-  accepted: ["copyeditor"],
+  eic_approval_pending: ["handling_editor"],
+  payment_pending: ["author"],
+  accepted: ["handling_editor"],
   rejected: ["author"],
-  copyediting: ["copyeditor"],
-  production: ["layout_editor"],
+  copyediting: ["handling_editor"],
+  production: ["handling_editor"],
+  scheduled: ["handling_editor"],
   published: ["publisher_admin"],
 };
 
@@ -19,14 +23,15 @@ export function getStatusOwnerRoles(status: SubmissionStatus): Role[] {
   return STATUS_OWNER_ROLES[status] ?? [];
 }
 
-/** True when the EIC can make an accept/reject/revision final decision. */
+/** True when the handling editor can act after peer reviews are complete. */
 export function isReadyForFinalEditorialDecision(
-  submission: Pick<Submission, "status" | "reviewSubmitted" | "editorRecommendation">,
+  submission: Pick<Submission, "status" | "reviewSubmitted" | "editorRecommendation" | "reviewers" | "reviewerId">,
 ): boolean {
-  return (
-    submission.status === "under_review" &&
-    (submission.reviewSubmitted === true || !!submission.editorRecommendation)
-  );
+  if (submission.status !== "under_review") return false;
+  const reviewsDone =
+    submission.reviewSubmitted === true ||
+    (submission.reviewers?.filter((r) => r.invitationStatus === "accepted" && r.reviewSubmitted).length ?? 0) >= 2;
+  return reviewsDone || !!submission.editorRecommendation;
 }
 
 export function shouldRevealParticipantName(roles: Role[]): boolean {
@@ -42,7 +47,7 @@ export interface SubmissionAssignee {
 export function getSubmissionAssignee(
   submission: Pick<
     Submission,
-    "status" | "authorId" | "handlingEditorId" | "reviewerId" | "layoutEditorId"
+    "status" | "authorId" | "handlingEditorId" | "handlingEditorIds" | "reviewerId" | "layoutEditorId"
   >,
   getUserById: (id: string) => { name: string; roles: Role[] } | undefined,
 ): SubmissionAssignee | undefined {
@@ -56,20 +61,35 @@ export function getSubmissionAssignee(
       };
     }
     case "assigned": {
-      const editor = submission.handlingEditorId
-        ? getUserById(submission.handlingEditorId)
-        : undefined;
+      const editorIds = getHandlingEditorIds(submission);
+      const editorNames = editorIds
+        .map((id) => getUserById(id)?.name)
+        .filter((name): name is string => !!name);
+      const name =
+        editorNames.length > 1
+          ? `${editorNames.length} handling editors`
+          : (editorNames[0] ?? "Awaiting editor assignment");
       return {
-        prefix: "Assigned to",
-        name: editor?.name ?? "Awaiting editor assignment",
-        roles: editor?.roles.filter((role) => role === "handling_editor") ?? ["handling_editor"],
+        prefix: editorNames.length > 1 ? "Assigned to" : "Assigned to",
+        name,
+        roles: ["handling_editor"],
       };
     }
     case "revision_required":
+    case "eic_approval_pending":
+    case "payment_pending":
     case "draft": {
       const author = getUserById(submission.authorId);
+      const prefix =
+        submission.status === "revision_required"
+          ? "Revision with"
+          : submission.status === "eic_approval_pending"
+            ? "Revision review with"
+            : submission.status === "payment_pending"
+              ? "Payment due for"
+              : "Draft with";
       return {
-        prefix: submission.status === "revision_required" ? "Revision with" : "Draft with",
+        prefix,
         name: author?.name ?? "Author",
         roles: author?.roles.filter((role) => role === "author") ?? ["author"],
       };
@@ -77,30 +97,25 @@ export function getSubmissionAssignee(
     case "submitted":
     case "administrative_review":
       return {
-        prefix: "Screening by",
-        name: "Editorial office",
-        roles: ["editorial_staff"],
+        prefix: "Awaiting assignment by",
+        name: "Editor in Chief",
+        roles: ["editor_in_chief"],
       };
     case "accepted":
-      return {
-        prefix: "Accepted — awaiting",
-        name: "Copyediting",
-        roles: ["copyeditor"],
-      };
     case "copyediting":
+    case "production":
+    case "scheduled": {
+      const editorIds = getHandlingEditorIds(submission);
+      const editor = editorIds[0] ? getUserById(editorIds[0]) : undefined;
       return {
-        prefix: "Copyediting with",
-        name: "Copyeditor",
-        roles: ["copyeditor"],
-      };
-    case "production": {
-      const layoutEditor = submission.layoutEditorId
-        ? getUserById(submission.layoutEditorId)
-        : undefined;
-      return {
-        prefix: layoutEditor ? "In production with" : "Awaiting",
-        name: layoutEditor?.name ?? "Layout editor assignment",
-        roles: layoutEditor?.roles.filter((role) => role === "layout_editor") ?? ["layout_editor"],
+        prefix:
+          submission.status === "scheduled"
+            ? "Scheduled by"
+            : submission.status === "production"
+              ? "In production with"
+              : "Accepted — with",
+        name: editor?.name ?? "Handling editor",
+        roles: ["handling_editor"],
       };
     }
     case "published":
@@ -127,32 +142,33 @@ export function needsAdminScreening(status: SubmissionStatus) {
 }
 
 export function isAssignedHandlingEditor(
-  handlingEditorId: string | undefined,
+  submission: Pick<Submission, "handlingEditorIds" | "handlingEditorId">,
   userId: string | undefined,
 ) {
-  return !!userId && handlingEditorId === userId;
+  if (!userId) return false;
+  return isHandlingEditorOnSubmission(submission, userId);
 }
 
 export function canManageAsHandlingEditor(
-  submission: Pick<Submission, "handlingEditorId" | "status">,
+  submission: Pick<Submission, "handlingEditorIds" | "handlingEditorId" | "status">,
   userId: string | undefined,
   roles: string[],
 ) {
   if (!userId || !roles.includes("handling_editor")) return false;
-  if (submission.handlingEditorId === userId) return true;
+  if (isHandlingEditorOnSubmission(submission, userId)) return true;
   // Allow handling editor to accept unassigned manuscripts at "assigned" stage
-  if (submission.status === "assigned" && !submission.handlingEditorId) return true;
+  if (submission.status === "assigned" && !hasHandlingEditors(submission)) return true;
   return false;
 }
 
 export function canActAsHandlingEditor(
-  handlingEditorId: string | undefined,
+  submission: Pick<Submission, "handlingEditorIds" | "handlingEditorId">,
   userId: string | undefined,
   isEditorInChief: boolean,
 ) {
   if (!userId) return false;
   if (isEditorInChief) return true;
-  return handlingEditorId === userId;
+  return isHandlingEditorOnSubmission(submission, userId);
 }
 
 export const REVIEW_RECOMMENDATIONS = [
@@ -162,15 +178,42 @@ export const REVIEW_RECOMMENDATIONS = [
   { value: "reject", label: "Reject" },
 ] as const;
 
+/** Canonical workflow order for timeline progress and status comparisons. */
+export const WORKFLOW_STATUS_ORDER: SubmissionStatus[] = [
+  "draft",
+  "submitted",
+  "administrative_review",
+  "assigned",
+  "under_review",
+  "revision_required",
+  "eic_approval_pending",
+  "payment_pending",
+  "accepted",
+  "copyediting",
+  "production",
+  "scheduled",
+  "published",
+  "rejected",
+];
+
+export function workflowStatusRank(status?: SubmissionStatus): number {
+  if (!status) return -1;
+  const index = WORKFLOW_STATUS_ORDER.indexOf(status);
+  return index >= 0 ? index : -1;
+}
+
 export const WORKFLOW_STAGE_LABELS: Partial<Record<SubmissionStatus, string>> = {
   submitted: "Awaiting Screening",
   administrative_review: "Administrative Screening",
   assigned: "Editor Assignment",
   under_review: "Peer Review",
   revision_required: "Author Revision",
-  accepted: "Accepted — Production Queue",
+  eic_approval_pending: "Handling Editor Revision Review",
+  payment_pending: "Acceptance Payment",
+  accepted: "Accepted — Awaiting Payment",
   copyediting: "Copyediting",
   production: "Layout & Production",
+  scheduled: "Scheduled for Publication",
   published: "Published",
   rejected: "Rejected",
   draft: "Draft",

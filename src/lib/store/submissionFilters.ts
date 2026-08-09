@@ -1,7 +1,40 @@
 import type { Role } from "@/lib/rbac/types";
+import type { ScopeContext } from "@/lib/rbac/types";
 import type { Submission, SubmissionStatus } from "@/lib/store/types";
+import { isHandlingEditorOnSubmission } from "@/lib/workflow/handlingEditors";
 import { isReadyForFinalEditorialDecision } from "@/lib/workflow/submissionActions";
+import { getReviewerSlot, isReviewerOnSubmission } from "@/lib/workflow/reviewers";
 import { deriveLayoutPhase } from "@/lib/workflow/layoutPhase";
+
+export function filterSubmissionsForUser(
+  submissions: Submission[],
+  userId: string,
+  roles: Role[],
+): Submission[] {
+  if (roles.includes("publisher_admin") || roles.includes("editor_in_chief")) {
+    return submissions;
+  }
+  if (roles.includes("handling_editor")) {
+    return submissions.filter((s) => isHandlingEditorOnSubmission(s, userId));
+  }
+  if (roles.includes("reviewer")) {
+    return submissions.filter((submission) => {
+      const slot = getReviewerSlot(submission, userId);
+      return !!slot && slot.invitationStatus !== "declined";
+    });
+  }
+  if (roles.includes("production_editor")) {
+    return submissions.filter(
+      (s) =>
+        (s.status === "production" || s.status === "accepted") &&
+        (s.layoutEditorId === userId || !s.layoutEditorId),
+    );
+  }
+  if (roles.includes("author")) {
+    return submissions.filter((s) => s.authorId === userId);
+  }
+  return [];
+}
 
 function hasElevatedEditorAccess(roles: Role[]) {
   return roles.some((r) =>
@@ -15,17 +48,18 @@ export function filterSubmissionsForReviews(
   roles: Role[],
 ): Submission[] {
   if (roles.includes("reviewer") && !hasElevatedEditorAccess(roles)) {
-    return submissions.filter(
-      (s) =>
-        (s.reviewerId === userId || s.pendingReviewerId === userId) &&
-        (s.status === "under_review" || s.reviewerInvitationStatus === "pending"),
-    );
+    return submissions.filter((submission) => {
+      const slot = getReviewerSlot(submission, userId);
+      if (!slot || slot.invitationStatus === "declined") return false;
+      if (slot.invitationStatus === "pending") return true;
+      return submission.status === "under_review" && slot.invitationStatus === "accepted";
+    });
   }
 
   if (roles.includes("handling_editor") && !roles.includes("publisher_admin")) {
     return submissions.filter(
       (s) =>
-        s.handlingEditorId === userId &&
+        isHandlingEditorOnSubmission(s, userId) &&
         (s.status === "under_review" || s.status === "assigned"),
     );
   }
@@ -50,14 +84,17 @@ export function filterSubmissionsForEditorial(
 
   if (roles.includes("editor_in_chief") || roles.includes("publisher_admin")) {
     return submissions.filter(
-      (s) => s.status === "assigned" || isReadyForFinalEditorialDecision(s),
+      (s) =>
+        s.status === "submitted" ||
+        s.status === "assigned" ||
+        isReadyForFinalEditorialDecision(s),
     );
   }
 
   if (roles.includes("handling_editor")) {
     return submissions.filter(
       (s) =>
-        s.handlingEditorId === userId &&
+        isHandlingEditorOnSubmission(s, userId) &&
         (s.status === "assigned" || s.status === "under_review" || s.status === "revision_required"),
     );
   }
@@ -78,23 +115,25 @@ export function filterSubmissionsForProduction(
   roles: Role[],
   userId?: string,
 ): Submission[] {
-  if (roles.includes("copyeditor") && !roles.includes("layout_editor")) {
-    return submissions.filter((s) => s.status === "copyediting" || s.status === "accepted");
-  }
-
-  if (roles.includes("layout_editor") && !roles.includes("copyeditor")) {
+  if (roles.includes("handling_editor")) {
     return submissions.filter(
       (s) =>
-        s.status === "production" &&
+        (s.status === "production" || s.status === "accepted" || s.status === "scheduled") &&
+        isHandlingEditorOnSubmission(s, userId ?? ""),
+    );
+  }
+
+  if (roles.includes("production_editor")) {
+    return submissions.filter(
+      (s) =>
+        (s.status === "production" || s.status === "accepted") &&
         !s.proofApproved &&
         (s.layoutEditorId === userId || !s.layoutEditorId),
     );
   }
 
   if (roles.includes("publisher_admin")) {
-    return submissions.filter((s) =>
-      ["copyediting", "production", "accepted"].includes(s.status),
-    );
+    return submissions.filter((s) => ["production", "accepted", "scheduled"].includes(s.status));
   }
 
   return [];
@@ -105,7 +144,7 @@ export function filterCompletedLayouts(
   userId: string,
   roles: Role[],
 ): Submission[] {
-  if (!roles.includes("layout_editor") && !roles.includes("publisher_admin")) {
+  if (!roles.includes("production_editor") && !roles.includes("publisher_admin")) {
     return [];
   }
 
@@ -147,7 +186,7 @@ export function filterLayoutProductionFiles(
   roles: Role[],
   userId?: string,
 ): Submission[] {
-  if (roles.includes("layout_editor")) {
+  if (roles.includes("production_editor")) {
     return filterCompletedLayouts(submissions, userId ?? "", roles);
   }
 

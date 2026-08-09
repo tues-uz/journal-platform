@@ -1,4 +1,6 @@
 import { apiRequest } from "@/lib/api/client";
+import { fromNumericVolumeId } from "@/lib/demo/ids";
+import { isDemoMode } from "@/lib/demo/mode";
 
 interface VolumeDto {
   id: number;
@@ -21,8 +23,9 @@ export interface ManagedVolume {
 }
 
 function mapVolumeDto(dto: VolumeDto): ManagedVolume {
+  const id = isDemoMode() ? fromNumericVolumeId(dto.id) ?? String(dto.id) : String(dto.id);
   return {
-    id: String(dto.id),
+    id,
     number: dto.number,
     year: dto.year,
     title: dto.title ?? undefined,

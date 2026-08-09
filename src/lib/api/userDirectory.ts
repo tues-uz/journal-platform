@@ -1,5 +1,6 @@
 import type { Role } from "@/lib/rbac/types";
 import type { Submission } from "@/lib/store/types";
+import { getHandlingEditorIds } from "@/lib/workflow/handlingEditors";
 
 export interface DirectoryUser {
   name: string;
@@ -21,10 +22,11 @@ export function buildUserDirectory(submissions: Submission[]): (id: string) => D
 
   for (const s of submissions) {
     add(s.authorId, s.authorName, "author");
-    add(s.handlingEditorId, s.handlingEditorName, "handling_editor");
+    for (const editorId of getHandlingEditorIds(s)) {
+      add(editorId, s.handlingEditorName, "handling_editor");
+    }
     add(s.reviewerId, s.reviewerName, "reviewer");
-    add(s.copyeditorId, s.copyeditorName, "copyeditor");
-    add(s.layoutEditorId, s.layoutEditorName, "layout_editor");
+    add(s.layoutEditorId, s.layoutEditorName, "production_editor");
   }
 
   return (id: string) => map.get(id);

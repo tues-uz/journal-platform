@@ -39,7 +39,7 @@ export const LANDING_ARTICLES: LandingArticle[] = [
     authorAvatar:
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80",
     image:
-      "https://images.unsplash.com/photo-1542228262-3d6636a87b29?auto=format&fit=crop&w=800&q=80",
+      "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=800&q=80",
     category: "Microeconomics",
     readTime: 6,
     date: "Mar 12",

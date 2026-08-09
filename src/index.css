@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Italiana&family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
 @import '@fontsource/geist-sans/400.css';
 @import '@fontsource/geist-sans/500.css';
@@ -24,7 +24,7 @@
         --secondary-foreground: 210 50% 14%;
         --muted: 210 20% 96%;
         --muted-foreground: 210 20% 40%;
-        --accent: 37 40% 75%;
+        --accent: 210 20% 96%;
         --accent-foreground: 210 50% 14%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 100%;
@@ -59,8 +59,8 @@
         --secondary-foreground: 0 0% 98%;
         --muted: 210 30% 15%;
         --muted-foreground: 210 20% 65%;
-        --accent: 37 40% 75%;
-        --accent-foreground: 210 50% 8%;
+        --accent: 210 30% 15%;
+        --accent-foreground: 0 0% 98%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 100%;
         --border: 210 30% 20%;
@@ -92,7 +92,7 @@
     h4,
     h5,
     h6 {
-        @apply font-serif;
+        @apply font-serif tracking-wide;
     }
 
     html {

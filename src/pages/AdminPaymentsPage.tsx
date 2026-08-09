@@ -3,22 +3,11 @@ import { Navigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { PaymentListTable } from "@/components/shared/PaymentListTable";
-import { PaymentProofPreview } from "@/components/shared/PaymentProofPreview";
-import { PaymentStatusBadge } from "@/components/shared/PaymentStatusBadge";
+import { PaymentReviewDialog } from "@/components/shared/PaymentReviewDialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
-import { formatPaymentAmount } from "@/lib/payment/access";
 import { paymentsApi, type ManagedPayment } from "@/lib/api/payments";
 import { ApiClientError } from "@/lib/api/client";
 import type { PaymentStatus } from "@/lib/store/types";
@@ -118,7 +107,7 @@ const AdminPaymentsPage = () => {
       title="Payments"
       breadcrumbs={[{ label: "Dashboard", href: routes.dashboard }, { label: "Payments" }]}
     >
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         {filterButtons.map((item) => (
           <Button
             key={item.value}
@@ -155,7 +144,8 @@ const AdminPaymentsPage = () => {
         }}
       />
 
-      <Dialog
+      <PaymentReviewDialog
+        payment={selectedPayment}
         open={!!selectedPayment}
         onOpenChange={(open) => {
           if (!open) {
@@ -164,105 +154,15 @@ const AdminPaymentsPage = () => {
             setRejectReason("");
           }
         }}
-      >
-        <DialogContent className="max-w-lg rounded-xl">
-          <DialogHeader>
-            <DialogTitle>Payment Review</DialogTitle>
-          </DialogHeader>
-          {selectedPayment && (
-            <div className="space-y-4">
-              <div className="text-sm space-y-1">
-                <p>
-                  <span className="font-medium text-gray-700">Author:</span>{" "}
-                  {selectedPayment.authorName}
-                </p>
-                <p>
-                  <span className="font-medium text-gray-700">Amount:</span>{" "}
-                  {formatPaymentAmount(selectedPayment.amount, selectedPayment.currency)}
-                </p>
-                <p>
-                  <span className="font-medium text-gray-700">Submitted:</span>{" "}
-                  {new Date(selectedPayment.submittedAt).toLocaleString()}
-                </p>
-                {selectedPayment.referenceNote && (
-                  <p>
-                    <span className="font-medium text-gray-700">Reference:</span>{" "}
-                    {selectedPayment.referenceNote}
-                  </p>
-                )}
-                <div className="pt-1">
-                  <PaymentStatusBadge status={selectedPayment.status} />
-                </div>
-              </div>
-
-              <PaymentProofPreview paymentId={selectedPayment.id} />
-
-              {selectedPayment.status === "rejected" && selectedPayment.rejectionReason && (
-                <p className="text-sm text-red-700 bg-red-50 rounded-xl p-3">
-                  {selectedPayment.rejectionReason}
-                </p>
-              )}
-
-              {selectedPayment.status === "pending_review" && can("author_payment", "decide") && (
-                <>
-                  {showRejectForm ? (
-                    <div className="space-y-2">
-                      <Label htmlFor="rejectReason">Rejection reason</Label>
-                      <Textarea
-                        id="rejectReason"
-                        value={rejectReason}
-                        onChange={(e) => setRejectReason(e.target.value)}
-                        placeholder="Explain why the payment proof was rejected"
-                        className="rounded-xl"
-                      />
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </div>
-          )}
-          <DialogFooter className="gap-2 sm:gap-0">
-            {selectedPayment?.status === "pending_review" && can("author_payment", "decide") && (
-              <>
-                {showRejectForm ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="rounded-xl"
-                      disabled={reviewMutation.isPending}
-                      onClick={() => setShowRejectForm(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      className="rounded-xl"
-                      disabled={reviewMutation.isPending}
-                      onClick={handleReject}
-                    >
-                      {reviewMutation.isPending ? "Rejecting..." : "Confirm Reject"}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="rounded-xl"
-                      disabled={reviewMutation.isPending}
-                      onClick={() => setShowRejectForm(true)}
-                    >
-                      Reject
-                    </Button>
-                    <Button className="rounded-xl" disabled={reviewMutation.isPending} onClick={handleApprove}>
-                      {reviewMutation.isPending ? "Approving..." : "Approve"}
-                    </Button>
-                  </>
-                )}
-              </>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        canDecide={can("author_payment", "decide")}
+        isPending={reviewMutation.isPending}
+        showRejectForm={showRejectForm}
+        rejectReason={rejectReason}
+        onRejectReasonChange={setRejectReason}
+        onShowRejectForm={setShowRejectForm}
+        onApprove={handleApprove}
+        onReject={handleReject}
+      />
     </AuthenticatedLayout>
   );
 };

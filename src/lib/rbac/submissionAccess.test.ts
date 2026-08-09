@@ -23,14 +23,14 @@ const baseSubmission: Submission = {
 };
 
 describe("submissionAccess", () => {
-  it("allows copyeditors to view accepted submissions", () => {
+  it("allows production editors to view accepted submissions", () => {
     const submission = { ...baseSubmission, status: "accepted" as const };
-    expect(canViewSubmission(submission, ["copyeditor"], "user-copy")).toBe(true);
+    expect(canViewSubmission(submission, ["production_editor"], "user-production")).toBe(true);
   });
 
-  it("allows copyeditors to view copyediting submissions", () => {
-    const submission = { ...baseSubmission, status: "copyediting" as const };
-    expect(canViewSubmission(submission, ["copyeditor"], "user-copy")).toBe(true);
+  it("allows production editors to view production submissions", () => {
+    const submission = { ...baseSubmission, status: "production" as const };
+    expect(canViewSubmission(submission, ["production_editor"], "user-production")).toBe(true);
   });
 
   it("blocks EIC final decisions until review or HE recommendation", () => {
@@ -40,35 +40,41 @@ describe("submissionAccess", () => {
     ).toBe(false);
   });
 
-  it("allows EIC final decisions after review is submitted", () => {
+  it("blocks EIC final decisions after review is submitted", () => {
     expect(
       canPerformDecision(baseSubmission, "minor-revision", ["editor_in_chief"], "user-eic"),
+    ).toBe(false);
+  });
+
+  it("allows handling editor decisions after review is submitted", () => {
+    expect(
+      canPerformDecision(baseSubmission, "minor-revision", ["handling_editor"], "user-he"),
     ).toBe(true);
   });
 
-  it("allows assigned layout editor to view production submission", () => {
+  it("allows assigned handling editor to view production submission", () => {
     const submission = {
       ...baseSubmission,
       status: "production" as const,
-      layoutEditorId: "user-layout",
+      handlingEditorIds: ["user-he"],
     };
-    expect(canViewSubmission(submission, ["layout_editor"], "user-layout")).toBe(true);
+    expect(canViewSubmission(submission, ["handling_editor"], "user-he")).toBe(true);
   });
 
-  it("allows layout editor to view unassigned production submission", () => {
+  it("allows production editor to view unassigned production submission", () => {
     const submission = {
       ...baseSubmission,
       status: "production" as const,
     };
-    expect(canViewSubmission(submission, ["layout_editor"], "user-layout")).toBe(true);
+    expect(canViewSubmission(submission, ["production_editor"], "user-production")).toBe(true);
   });
 
-  it("blocks layout editor from viewing submission assigned to another editor", () => {
+  it("blocks production editor from viewing submission assigned to another editor", () => {
     const submission = {
       ...baseSubmission,
       status: "production" as const,
-      layoutEditorId: "user-layout-other",
+      layoutEditorId: "user-production-other",
     };
-    expect(canViewSubmission(submission, ["layout_editor"], "user-layout")).toBe(false);
+    expect(canViewSubmission(submission, ["production_editor"], "user-production")).toBe(false);
   });
 });

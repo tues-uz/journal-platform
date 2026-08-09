@@ -6,6 +6,7 @@ export type Role =
   | "reviewer"
   | "copyeditor"
   | "layout_editor"
+  | "production_editor"
   | "publisher_admin";
 
 export type Permission = "view" | "create" | "edit" | "assign" | "decide" | "publish";
@@ -22,6 +23,8 @@ export type Module =
   | "revision"
   | "editorial_decision"
   | "editorial_recommendation"
+  | "he_prescreening"
+  | "eic_revision_approval"
   | "copyediting"
   | "layout_production"
   | "proofreading"
@@ -38,10 +41,12 @@ export type Module =
 export interface ScopeContext {
   submissionAuthorId?: string;
   handlingEditorId?: string;
+  handlingEditorIds?: string[];
   reviewerId?: string;
   pendingReviewerId?: string;
   currentUserId?: string;
   isAssignedReviewer?: boolean;
+  reviewerSlotStatus?: "pending" | "accepted" | "declined";
   submissionStatus?: string;
 }
 
@@ -53,6 +58,7 @@ export const ALL_ROLES: Role[] = [
   "reviewer",
   "copyeditor",
   "layout_editor",
+  "production_editor",
   "publisher_admin",
 ];
 
@@ -67,5 +73,6 @@ export const ROLE_LABELS: Record<Role, string> = {
   reviewer: "Reviewer",
   copyeditor: "Copyeditor",
   layout_editor: "Layout Editor",
+  production_editor: "Production Editor",
   publisher_admin: "Publisher / Admin",
 };

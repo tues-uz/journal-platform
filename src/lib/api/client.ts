@@ -1,5 +1,7 @@
 import { tokenStorage } from "@/lib/api/tokenStorage";
 import type { ApiError as ApiErrorDetail, ApiResponse } from "@/lib/api/types";
+import { demoApiRequest } from "@/lib/demo/apiRequest";
+import { isDemoMode, isDemoToken } from "@/lib/demo/mode";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
@@ -30,6 +32,19 @@ async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = tokenStorage.getRefreshToken();
   if (!refreshToken) return null;
 
+  if (isDemoMode() || isDemoToken(refreshToken)) {
+    try {
+      const data = await demoApiRequest<{ accessToken: string; refreshToken: string }>(
+        "/api/auth/refresh",
+        { method: "POST", body: { refreshToken }, auth: false },
+      );
+      tokenStorage.save(data);
+      return data.accessToken;
+    } catch {
+      return null;
+    }
+  }
+
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
       method: "POST",
@@ -58,6 +73,10 @@ function buildUrl(path: string, params?: RequestOptions["params"]) {
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}, _retrying = false): Promise<T> {
   const { method = "GET", body, auth = true, params } = options;
+
+  if (isDemoMode()) {
+    return demoApiRequest<T>(path, { method, body, auth, params });
+  }
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (auth) {

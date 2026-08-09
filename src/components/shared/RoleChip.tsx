@@ -11,6 +11,7 @@ export const ROLE_CHIP_STYLES: Record<Role, string> = {
   reviewer: "bg-blue-50 text-blue-700 border-blue-200",
   copyeditor: "bg-teal-50 text-teal-700 border-teal-200",
   layout_editor: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  production_editor: "bg-cyan-50 text-cyan-800 border-cyan-200",
   publisher_admin: "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 

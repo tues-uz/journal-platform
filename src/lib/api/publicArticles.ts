@@ -1,4 +1,6 @@
 import { apiRequest, ApiClientError } from "@/lib/api/client";
+import { fromNumericSubmissionId } from "@/lib/demo/ids";
+import { isDemoMode } from "@/lib/demo/mode";
 import type { PublicArticle, PublicManuscriptDisplay } from "@/lib/store/publicArticles";
 
 interface PublicAuthorDto {
@@ -49,7 +51,7 @@ function mapPublicArticleDto(dto: PublicArticleDto): PublicArticle {
       : undefined;
 
   return {
-    id: String(dto.id),
+    id: isDemoMode() ? fromNumericSubmissionId(dto.id) : String(dto.id),
     submissionNumber: dto.submissionNumber,
     title: dto.title,
     excerpt: dto.abstractText,

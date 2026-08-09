@@ -2,8 +2,9 @@ import { getRoleModulePermissions } from "@/lib/rbac/permissions";
 import type { Module, Permission, Role, ScopeContext } from "@/lib/rbac/types";
 
 function isAssignedHandlingEditor(context?: ScopeContext): boolean {
+  if (!context?.currentUserId) return false;
+  if (context.handlingEditorIds?.includes(context.currentUserId)) return true;
   return (
-    !!context?.currentUserId &&
     !!context.handlingEditorId &&
     context.handlingEditorId === context.currentUserId
   );
@@ -15,6 +16,21 @@ function isAssignedOrPendingReviewer(context?: ScopeContext): boolean {
   if (context.reviewerId === context.currentUserId) return true;
   if (context.pendingReviewerId === context.currentUserId) return true;
   return false;
+}
+
+function isAcceptedReviewer(context?: ScopeContext): boolean {
+  if (!context?.currentUserId) return false;
+  if (context.reviewerSlotStatus === "accepted") return true;
+  if (context.reviewerSlotStatus === "pending" || context.reviewerSlotStatus === "declined") {
+    return false;
+  }
+  return context.reviewerId === context.currentUserId;
+}
+
+function isPendingReviewer(context?: ScopeContext): boolean {
+  if (!context?.currentUserId) return false;
+  if (context.reviewerSlotStatus === "pending") return true;
+  return context.pendingReviewerId === context.currentUserId;
 }
 
 function isSubmissionAuthor(context?: ScopeContext): boolean {
@@ -38,23 +54,59 @@ function checkScopedPermission(
       return permission === "view" && isSubmissionAuthor(context);
     case "peer_review":
       if (permission === "view") {
-        return isAssignedOrPendingReviewer(context) || isAssignedHandlingEditor(context);
+        return (
+          (isAssignedOrPendingReviewer(context) &&
+            context.reviewerSlotStatus !== "declined") ||
+          isAssignedHandlingEditor(context)
+        );
       }
       return (
         (permission === "create" ||
           permission === "edit" ||
           permission === "decide") &&
-        isAssignedOrPendingReviewer(context) &&
-        context.reviewerId === context.currentUserId
+        isAcceptedReviewer(context)
+      );
+    case "reviewer_invitation":
+      return (
+        (permission === "view" || permission === "decide") && isPendingReviewer(context)
       );
     case "editorial_recommendation":
       return (
         (permission === "view" || permission === "decide") &&
         isAssignedHandlingEditor(context)
       );
+    case "he_prescreening":
+      return (
+        (permission === "view" || permission === "decide") &&
+        isAssignedHandlingEditor(context)
+      );
+    case "eic_revision_approval":
+      return permission === "view" || permission === "decide";
     case "editorial_decision":
-      return permission === "view" && isSubmissionAuthor(context);
+      if (permission === "view" && isSubmissionAuthor(context)) return true;
+      return (
+        (permission === "view" || permission === "decide") &&
+        isAssignedHandlingEditor(context)
+      );
+    case "layout_production":
+      return (
+        (permission === "view" ||
+          permission === "create" ||
+          permission === "edit" ||
+          permission === "decide") &&
+        isAssignedHandlingEditor(context)
+      );
     case "publication":
+      if (
+        (permission === "view" || permission === "edit" || permission === "decide") &&
+        isSubmissionAuthor(context)
+      ) {
+        return true;
+      }
+      return (
+        (permission === "view" || permission === "edit") &&
+        isAssignedHandlingEditor(context)
+      );
     case "proofreading":
       return (
         (permission === "view" || permission === "edit" || permission === "decide") &&
@@ -100,6 +152,8 @@ export function canViewModule(roles: Role[]): Module[] {
     "revision",
     "editorial_decision",
     "editorial_recommendation",
+    "he_prescreening",
+    "eic_revision_approval",
     "copyediting",
     "layout_production",
     "proofreading",

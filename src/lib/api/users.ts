@@ -1,5 +1,7 @@
 import { apiRequest } from "@/lib/api/client";
 import type { Role } from "@/lib/rbac/types";
+import { fromNumericUserId } from "@/lib/demo/ids";
+import { isDemoMode } from "@/lib/demo/mode";
 
 export interface UserCandidate {
   id: string;
@@ -34,8 +36,9 @@ interface UserDto {
 }
 
 function mapUserDto(dto: UserDto): ManagedUser {
+  const id = isDemoMode() ? fromNumericUserId(dto.id) ?? String(dto.id) : String(dto.id);
   return {
-    id: String(dto.id),
+    id,
     name: dto.name,
     email: dto.email,
     roles: dto.roles.map((r) => r.toLowerCase() as Role),

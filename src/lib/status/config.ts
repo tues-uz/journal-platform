@@ -19,10 +19,19 @@ export const STATUS_CONFIG: Record<
     label: "Revision Required",
     className: "bg-amber-50 text-amber-700 border-amber-200",
   },
+  eic_approval_pending: {
+    label: "EiC Approval Pending",
+    className: "bg-violet-50 text-violet-700 border-violet-200",
+  },
+  payment_pending: {
+    label: "Payment Pending",
+    className: "bg-yellow-50 text-yellow-800 border-yellow-200",
+  },
   accepted: { label: "Accepted", className: "bg-green-50 text-green-700 border-green-200" },
   rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-200" },
   copyediting: { label: "Copyediting", className: "bg-teal-50 text-teal-700 border-teal-200" },
   production: { label: "Production", className: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+  scheduled: { label: "Scheduled", className: "bg-sky-50 text-sky-700 border-sky-200" },
   published: { label: "Published", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
 };
 

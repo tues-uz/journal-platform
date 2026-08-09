@@ -7,11 +7,25 @@ export type SubmissionStatus =
   | "assigned"
   | "under_review"
   | "revision_required"
+  | "eic_approval_pending"
+  | "payment_pending"
   | "accepted"
   | "rejected"
   | "copyediting"
   | "production"
+  | "scheduled"
   | "published";
+
+export interface ReviewerAssignment {
+  reviewerId: string;
+  invitationStatus: ReviewerInvitationStatus;
+  reviewSubmitted?: boolean;
+  recommendation?: string;
+  comments?: string;
+}
+
+/** Minimum reviewers required before HE can recommend (PRD business rule). */
+export const MIN_REVIEWERS = 2;
 
 export interface StoreUser {
   id: string;
@@ -128,10 +142,19 @@ export interface Submission {
   authors: SubmissionAuthor[];
   handlingEditorId?: string;
   handlingEditorName?: string;
+  /** Multiple handling editors may be assigned by the EiC. */
+  handlingEditorIds?: string[];
   reviewerId?: string;
   reviewerName?: string;
   pendingReviewerId?: string;
   reviewerInvitationStatus?: ReviewerInvitationStatus;
+  /** PRD: track multiple reviewer slots (min 2). */
+  reviewers?: ReviewerAssignment[];
+  /** HE completed pre-screening and cleared manuscript for peer review. */
+  hePrescreenComplete?: boolean;
+  revisionRound?: number;
+  scheduledAt?: string;
+  acceptancePaymentVerified?: boolean;
   proofReady?: boolean;
   proofApproved?: boolean;
   reviewSubmitted?: boolean;

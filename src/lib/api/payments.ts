@@ -1,4 +1,6 @@
 import { apiRequest } from "@/lib/api/client";
+import { isDemoMode } from "@/lib/demo/mode";
+import { readFileAsDataUrl } from "@/lib/files/submissionFiles";
 import type { PaymentStatus } from "@/lib/store/types";
 
 interface PaymentDto {
@@ -141,18 +143,30 @@ export const paymentsApi = {
       { method: "POST", body: { filename: file.name, contentType: file.type || "application/octet-stream" } },
     );
 
-    const putRes = await fetch(presigned.uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": file.type || "application/octet-stream" },
-      body: file,
-    });
-    if (!putRes.ok) {
-      throw new Error(`Upload to storage failed (${putRes.status})`);
+    if (!isDemoMode()) {
+      const putRes = await fetch(presigned.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      if (!putRes.ok) {
+        throw new Error(`Upload to storage failed (${putRes.status})`);
+      }
+    }
+
+    const completeBody: Record<string, unknown> = {
+      key: presigned.key,
+      referenceNote,
+      filename: file.name,
+    };
+    if (isDemoMode()) {
+      completeBody.size = file.size;
+      completeBody.dataUrl = await readFileAsDataUrl(file);
     }
 
     const dto = await apiRequest<PaymentDto>("/api/payments", {
       method: "POST",
-      body: { key: presigned.key, referenceNote },
+      body: completeBody,
     });
     return mapPaymentDto(dto);
   },

@@ -1,411 +1,341 @@
-import JournalHeader from "@/components/JournalHeader";
-import Footer from "@/components/Footer";
+import PublicJournalLayout from "@/components/layout/PublicJournalLayout";
 import { PublishedArticlesSection } from "@/components/landing/PublishedArticlesSection";
-import {
-  Clock,
-  Bookmark,
-  Share2,
-  MoreHorizontal,
-  ChevronLeft,
-  ChevronRight,
-  Search,
-} from "lucide-react";
-import { Link } from "react-router-dom";
-import { useState, useRef, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import JournalSidebar from "@/components/JournalSidebar";
+import { Clock, Search } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
 import { routes } from "@/app/routes";
-import { filterLandingArticles, LANDING_ARTICLES } from "@/lib/landing/articles";
-import { Input } from "@/components/ui/input";
-import { publicArticlesApi } from "@/lib/api/publicArticles";
-import { matchesPublicArticleSearch, matchesPublicArticleTopic } from "@/lib/store/publicArticles";
+import { JOURNAL_SUBJECTS } from "@/lib/journal/subjects";
+import { useJournalSearch } from "@/lib/journal/useJournalSearch";
+
+const HERO_IMAGE =
+  "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=2000&q=80";
 
 const Journal = () => {
-  const [selectedTopic, setSelectedTopic] = useState("All");
+  const [searchParams] = useSearchParams();
+  const topicFromUrl = searchParams.get("topic");
+  const [selectedTopic, setSelectedTopic] = useState(topicFromUrl || "All");
   const [searchQuery, setSearchQuery] = useState("");
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLElement>(null);
 
-  const topics = [
-    "All",
-    "Macroeconomics",
-    "Microeconomics",
-    "Policy & Reform",
-    "Data Analysis",
-    "Behavioral Economics",
-    "International Trade",
-    "Development Economics",
-    "Financial Markets",
-    "Public Policy",
-    "Research",
-  ];
+  useEffect(() => {
+    if (!topicFromUrl) return;
+    setSelectedTopic(topicFromUrl);
+    setSearchQuery("");
+    requestAnimationFrame(() => {
+      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [topicFromUrl]);
 
-  const scrollLeft = () => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ left: -200, behavior: "smooth" });
-    }
+  const scrollToResults = () => {
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const scrollRight = () => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ left: 200, behavior: "smooth" });
-    }
+  const selectSubject = (subject: string) => {
+    setSelectedTopic(subject);
+    setSearchQuery("");
+    requestAnimationFrame(() => scrollToResults());
   };
 
-  const { data: publishedArticles = [] } = useQuery({
-    queryKey: ["public-articles"],
-    queryFn: () => publicArticlesApi.list(),
-  });
+  const {
+    filteredArticles,
+    filteredPublishedArticles,
+    totalResults,
+    hasActiveSearch,
+  } = useJournalSearch(searchQuery, selectedTopic);
 
-  const filteredArticles = useMemo(
-    () => filterLandingArticles(LANDING_ARTICLES, searchQuery, selectedTopic),
-    [searchQuery, selectedTopic],
-  );
-
-  const filteredPublishedArticles = useMemo(
-    () =>
-      publishedArticles.filter(
-        (article) =>
-          matchesPublicArticleTopic(article, selectedTopic) &&
-          matchesPublicArticleSearch(article, searchQuery),
-      ),
-    [publishedArticles, searchQuery, selectedTopic],
-  );
+  const searchFeedback = hasActiveSearch
+    ? totalResults === 0
+      ? "No articles or author submissions match your search."
+      : `${totalResults} result${totalResults === 1 ? "" : "s"} found${
+          filteredPublishedArticles.length > 0
+            ? ` (${filteredPublishedArticles.length} published submission${
+                filteredPublishedArticles.length === 1 ? "" : "s"
+              })`
+            : ""
+        }`
+    : "";
 
   const featuredArticle = filteredArticles.find((a) => a.featured);
   const regularArticles = filteredArticles.filter((a) => !a.featured);
-  const discoverMoreArticles = filteredArticles.filter((a) => [9, 10, 11].includes(a.id));
-  const hasActiveSearch = searchQuery.trim().length > 0;
-  const totalSearchResults = filteredArticles.length + filteredPublishedArticles.length;
 
   return (
-    <div className="min-h-screen bg-white">
-      <JournalHeader />
+    <PublicJournalLayout showSidebar={false}>
+      {/* Split hero — white typography + full-bleed image */}
+      <section className="flex h-[100dvh] flex-col bg-white">
+        <div className="relative flex flex-[1.05] flex-col justify-end overflow-hidden px-6 pb-10 pt-24 md:px-12 lg:px-16 lg:pb-14">
+          <div className="relative z-10 mx-auto grid w-full max-w-7xl gap-10 md:grid-cols-12 md:items-end md:gap-12">
+            <div className="animate-hero-fade-up md:col-span-4">
+              <p className="font-sans text-sm font-semibold text-gray-900">About the journal</p>
+              <p className="mt-3 max-w-xs text-sm leading-relaxed text-gray-600">
+                Peer-reviewed research, commentary, and policy analysis across economics—with a focus on Central Asia and emerging economies.
+              </p>
+              <Link
+                to={routes.about}
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-gray-900 transition-colors hover:text-gray-700"
+              >
+                Read more
+                <span aria-hidden>→</span>
+              </Link>
+            </div>
 
-      <main className="pt-24 pb-16">
-        {/* Hero Section - Medium Style */}
-        <section className="border-b border-gray-200 bg-white">
-          <div className="max-w-7xl mx-auto px-6 py-12">
-            <div className="max-w-3xl mx-auto text-center">
-              <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-4 tracking-tight">
+            <div className="animate-hero-fade-up-delayed md:col-span-8">
+              <h1 className="font-serif text-4xl font-bold leading-[1.05] tracking-wide text-black sm:text-5xl md:text-6xl lg:text-[4.25rem]">
                 TUES Economics Journal
               </h1>
-              <p className="text-base text-gray-600 max-w-2xl mx-auto leading-relaxed">
-                Research, commentary, and analysis from economists, scholars, and policy thinkers
+              <p className="mt-4 max-w-xl text-base text-gray-600 md:text-lg">
+                Search by author, DOI, title, or keyword.
               </p>
 
-              <div className="mt-8 max-w-xl mx-auto">
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-                  <Input
+              <form
+                className="relative mt-8 max-w-xl"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  scrollToResults();
+                }}
+              >
+                <label className="group relative flex items-center gap-3 border-b border-gray-900/15 pb-3 transition-colors focus-within:border-oxford-blue">
+                  <span className="sr-only">Search by author name or DOI</span>
+                  <Search
+                    className="h-5 w-5 shrink-0 text-gray-400 transition-colors group-focus-within:text-oxford-blue"
+                    aria-hidden
+                  />
+                  <input
                     type="search"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search articles, authors, and author submissions..."
-                    aria-label="Search journal articles"
-                    className="h-12 rounded-full border-gray-300 bg-white pl-12 pr-4 text-base shadow-sm focus-visible:ring-gray-400"
+                    placeholder="Author name or DOI"
+                    aria-label="Search by author name or DOI"
+                    className="peer min-w-0 flex-1 border-0 bg-transparent py-2 text-sm leading-none text-gray-900 outline-none placeholder:text-gray-400 [appearance:textfield] [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden md:text-base"
                   />
-                </div>
-                {hasActiveSearch && (
-                  <p className="mt-3 text-sm text-gray-500">
-                    {totalSearchResults === 0
-                      ? "No articles or author submissions match your search."
-                      : `${totalSearchResults} result${totalSearchResults === 1 ? "" : "s"} found${
-                          filteredPublishedArticles.length > 0
-                            ? ` (${filteredPublishedArticles.length} published submission${
-                                filteredPublishedArticles.length === 1 ? "" : "s"
-                              })`
-                            : ""
-                        }`}
-                  </p>
-                )}
-              </div>
+                  <button
+                    type="submit"
+                    className="shrink-0 bg-journal-teal px-5 py-2.5 text-sm font-medium leading-none text-white transition-colors hover:bg-journal-teal-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-journal-teal/40 focus-visible:ring-offset-2 rounded-none"
+                  >
+                    Search
+                  </button>
+                </label>
+                <p
+                  className={`pointer-events-none absolute inset-x-0 top-full mt-3 line-clamp-2 text-sm leading-snug text-gray-500 transition-opacity ${
+                    hasActiveSearch ? "opacity-100" : "opacity-0"
+                  }`}
+                  aria-live="polite"
+                >
+                  {searchFeedback || "\u00a0"}
+                </p>
+              </form>
             </div>
           </div>
-        </section>
+        </div>
 
-        {/* Topic Filter Bar - Medium Style */}
-        <section className="border-b border-gray-200 bg-white sticky top-16 z-40">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="relative flex items-center">
-              {/* Scroll Left Button */}
-              <button
-                onClick={scrollLeft}
-                className="absolute left-0 z-10 bg-white/80 backdrop-blur-sm p-2 hover:bg-gray-100 rounded-full transition-colors"
-                aria-label="Scroll left"
-              >
-                <ChevronLeft className="w-5 h-5 text-gray-600" />
-              </button>
+        <div className="relative h-[46%] min-h-[220px] overflow-hidden bg-oxford-dark">
+          <img
+            src={HERO_IMAGE}
+            alt=""
+            className="h-full w-full object-cover animate-hero-image-zoom"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+        </div>
+      </section>
 
-              {/* Scrollable Topics */}
-              <div
-                ref={scrollContainerRef}
-                className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-4 px-8"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              >
-                {/* Explore Topics Button */}
-                <button className="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-300 hover:bg-gray-50 transition-colors whitespace-nowrap flex-shrink-0">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    height="20"
-                    width="20"
-                    className="text-gray-600"
-                  >
-                    <circle cx="12" cy="12.001" r="10.5" stroke="currentColor"></circle>
-                    <path
-                      fill="currentColor"
-                      fillRule="evenodd"
-                      d="m16.083 6.167-.147.989-.984 6.636-.036.247-.22.119-5.899 3.194-.88.476.147-.989.984-6.635.037-.248.22-.119 5.899-3.194zM9.92 11.15 9.2 15.997l4.308-2.333zm4.163 1.695-3.59-2.514L14.8 8z"
-                      clipRule="evenodd"
-                    ></path>
-                  </svg>
-                  <span className="text-sm font-medium text-gray-700">Explore topics</span>
-                </button>
+      {/* Browse by subject — below hero image */}
+      <section className="bg-white px-6 py-20 md:py-28">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-sm font-semibold tracking-wide text-gray-500 uppercase">
+                Browse
+              </p>
+              <h2 className="mt-1 font-serif text-3xl font-bold tracking-wide text-black md:text-4xl">
+                By subject
+              </h2>
+              <p className="mt-2 max-w-md text-sm leading-relaxed text-gray-600">
+                Explore economics journal subject categories across theory, applied fields, and policy.
+              </p>
+            </div>
+            <Link
+              to={routes.topics}
+              className="inline-flex shrink-0 items-center gap-2 border border-gray-900 bg-gray-950 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+            >
+              Journal A to Z
+              <span aria-hidden>→</span>
+            </Link>
+          </div>
 
-                {/* Topic Buttons */}
-                {topics.map((topic) => (
+          <ul className="grid gap-x-8 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+            {JOURNAL_SUBJECTS.map((subject) => {
+              const isActive = selectedTopic === subject;
+              return (
+                <li key={subject}>
                   <button
-                    key={topic}
-                    onClick={() => setSelectedTopic(topic)}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
-                      selectedTopic === topic
-                        ? "bg-gray-900 text-white"
-                        : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
+                    type="button"
+                    onClick={() => selectSubject(subject)}
+                    className={`group flex w-full items-center justify-between border-b py-3.5 text-left text-sm transition-colors ${
+                      isActive
+                        ? "border-gray-900 text-gray-900"
+                        : "border-gray-200 text-gray-700 hover:border-gray-400 hover:text-gray-950"
                     }`}
                   >
-                    {topic}
+                    <span className="font-medium">{subject}</span>
+                    <span
+                      aria-hidden
+                      className={`text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500 ${
+                        isActive ? "text-gray-700" : ""
+                      }`}
+                    >
+                      →
+                    </span>
                   </button>
-                ))}
-              </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </section>
 
-              {/* Scroll Right Button */}
-              <button
-                onClick={scrollRight}
-                className="absolute right-0 z-10 bg-white/80 backdrop-blur-sm p-2 hover:bg-gray-100 rounded-full transition-colors"
-                aria-label="Scroll right"
-              >
-                <ChevronRight className="w-5 h-5 text-gray-600" />
-              </button>
+      <section
+        ref={resultsRef}
+        id="journal-results"
+        className="bg-white px-6 py-20 md:py-28"
+      >
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-8 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-sm font-semibold tracking-wide text-gray-500 uppercase">
+                Reading
+              </p>
+              <h2 className="mt-1 font-serif text-3xl font-bold tracking-wide text-black md:text-4xl">
+                {selectedTopic === "All" ? "Latest articles" : selectedTopic}
+              </h2>
             </div>
+            {selectedTopic !== "All" && (
+              <button
+                type="button"
+                onClick={() => setSelectedTopic("All")}
+                className="text-sm font-medium text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline"
+              >
+                Clear subject filter
+              </button>
+            )}
           </div>
-        </section>
 
-        {/* Featured Article */}
-        {featuredArticle && (
-          <section className="border-b border-gray-200 bg-white">
-            <div className="max-w-7xl mx-auto px-6 py-12">
-              <div className="max-w-4xl mx-auto">
-                <Link
-                  to={routes.article(featuredArticle.id)}
-                  className="block cursor-pointer group"
-                >
-                  <article>
-                  <div className="mb-6">
-                    <img
-                      src={featuredArticle.image}
-                      alt={featuredArticle.title}
-                      className="w-full h-[400px] object-cover rounded-lg"
-                    />
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={featuredArticle.authorAvatar}
-                          alt={featuredArticle.author}
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {featuredArticle.author}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-gray-400">·</span>
-                      <span className="text-sm text-gray-600">{featuredArticle.date}</span>
-                      <span className="text-gray-400">·</span>
-                      <div className="flex items-center gap-1 text-sm text-gray-600">
-                        <Clock className="w-4 h-4" />
-                        <span>{featuredArticle.readTime} min read</span>
-                      </div>
+          {featuredArticle && (
+            <Link
+              to={routes.article(featuredArticle.id)}
+              className="group mb-12 block border-b border-gray-200 pb-12"
+            >
+              <article>
+                <div className="mb-6 overflow-hidden">
+                  <img
+                    src={featuredArticle.image}
+                    alt={featuredArticle.title}
+                    className="h-[360px] w-full object-cover transition-transform duration-700 group-hover:scale-[1.02] md:h-[420px]"
+                  />
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 max-w-4xl space-y-4">
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                      <img
+                        src={featuredArticle.authorAvatar}
+                        alt={featuredArticle.author}
+                        className="h-8 w-8 rounded-full object-cover"
+                      />
+                      <span className="font-medium text-gray-900">{featuredArticle.author}</span>
+                      <span className="text-gray-300">·</span>
+                      <span>{featuredArticle.date}</span>
+                      <span className="text-gray-300">·</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        {featuredArticle.readTime} min read
+                      </span>
                     </div>
-                    <h2 className="text-3xl md:text-4xl font-bold text-gray-900 leading-tight group-hover:text-gray-700 transition-colors">
+                    <h3 className="font-serif text-3xl font-bold leading-tight tracking-wide text-black transition-opacity group-hover:opacity-70 md:text-4xl">
                       {featuredArticle.title}
-                    </h2>
-                    <p className="text-lg text-gray-600 leading-relaxed">
+                    </h3>
+                    <p className="text-lg leading-relaxed text-gray-600">
                       {featuredArticle.excerpt}
                     </p>
-                    <div className="flex items-center justify-between pt-4">
-                      <div className="flex items-center gap-2">
-                        <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">
-                          {featuredArticle.category}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                          <Bookmark className="w-5 h-5 text-gray-600" />
-                        </button>
-                        <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                          <Share2 className="w-5 h-5 text-gray-600" />
-                        </button>
-                        <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                          <MoreHorizontal className="w-5 h-5 text-gray-600" />
-                        </button>
-                      </div>
-                    </div>
+                    <p className="text-sm font-medium text-gray-700">{featuredArticle.category}</p>
                   </div>
-                  </article>
-                </Link>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Articles Grid - Medium Style */}
-        <section className="bg-white">
-          <div className="max-w-7xl mx-auto px-6 py-12">
-            <div className="grid lg:grid-cols-3 gap-8">
-              {/* Main Articles Column */}
-              <div className="lg:col-span-2 space-y-8">
-                {regularArticles.length === 0 && filteredPublishedArticles.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-center">
-                    <Search className="mx-auto mb-3 h-8 w-8 text-gray-400" />
-                    <p className="text-lg font-medium text-gray-900">No articles found</p>
-                    <p className="mt-2 text-gray-600">
-                      Try a different search term, author name, or clear the topic filter.
-                    </p>
-                  </div>
-                )}
-                {regularArticles.map((article) => (
-                  <Link
-                    key={article.id}
-                    to={routes.article(article.id)}
-                    className="block cursor-pointer group border-b border-gray-200 pb-8 last:border-0"
+                  <span
+                    aria-hidden
+                    className="mt-2 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500"
                   >
-                    <article>
-                    <div className="flex gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
+                    →
+                  </span>
+                </div>
+              </article>
+            </Link>
+          )}
+
+          <div className="grid gap-12 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              {regularArticles.length === 0 && filteredPublishedArticles.length === 0 && (
+                <div className="border-b border-gray-200 py-10">
+                  <Search className="mb-3 h-6 w-6 text-gray-400" />
+                  <p className="font-medium text-gray-900">No articles found</p>
+                  <p className="mt-2 text-sm text-gray-600">
+                    Try a different search term, author name, DOI, or subject.
+                  </p>
+                </div>
+              )}
+
+              <ul>
+                {regularArticles.map((article) => (
+                  <li key={article.id}>
+                    <Link
+                      to={routes.article(article.id)}
+                      className="group flex items-start justify-between gap-4 border-b border-gray-200 py-6 transition-colors hover:border-gray-400"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-gray-500">
                           <img
                             src={article.authorAvatar}
                             alt={article.author}
-                            className="w-6 h-6 rounded-full object-cover"
+                            className="h-6 w-6 rounded-full object-cover"
                           />
-                          <span className="text-sm text-gray-600">{article.author}</span>
-                          <span className="text-gray-400">·</span>
-                          <span className="text-sm text-gray-500">{article.date}</span>
+                          <span>{article.author}</span>
+                          <span className="text-gray-300">·</span>
+                          <span>{article.date}</span>
                         </div>
-                        <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-2 leading-tight group-hover:text-gray-700 transition-colors line-clamp-2">
+                        <h3 className="font-serif text-xl font-bold leading-snug tracking-wide text-black transition-opacity group-hover:opacity-70 md:text-2xl">
                           {article.title}
                         </h3>
-                        <p className="text-gray-600 mb-3 leading-relaxed line-clamp-2">
+                        <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-gray-600">
                           {article.excerpt}
                         </p>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
-                              {article.category}
-                            </span>
-                            <div className="flex items-center gap-1 text-sm text-gray-500">
-                              <Clock className="w-3 h-3" />
-                              <span>{article.readTime} min</span>
-                            </div>
-                          </div>
-                          <button className="p-1.5 hover:bg-gray-100 rounded-full transition-colors">
-                            <Bookmark className="w-4 h-4 text-gray-400" />
-                          </button>
+                        <div className="mt-3 flex items-center gap-3 text-sm text-gray-500">
+                          <span className="font-medium text-gray-700">{article.category}</span>
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" />
+                            {article.readTime} min
+                          </span>
                         </div>
                       </div>
-                      <div className="flex-shrink-0">
-                        <img
-                          src={article.image}
-                          alt={article.title}
-                          className="w-32 h-32 md:w-40 md:h-40 object-cover rounded"
-                        />
-                      </div>
-                    </div>
-                    </article>
-                  </Link>
-                ))}
-              </div>
-
-              {/* Sidebar */}
-              <aside className="lg:col-span-1">
-                <div className="sticky top-24 space-y-8">
-                  {/* Discover More */}
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">
-                      Discover more
-                    </h3>
-                    <div className="space-y-4">
-                      {discoverMoreArticles.map((article) => (
-                        <Link
-                          key={article.id}
-                          to={routes.article(article.id)}
-                          className="flex items-start gap-3 cursor-pointer group"
-                        >
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold text-gray-900 group-hover:text-gray-700 transition-colors line-clamp-2">
-                              {article.title}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">{article.readTime} min read</p>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Call for Papers */}
-                  <div className="border border-gray-200 rounded-lg p-6 bg-gray-50">
-                    <h3 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">
-                      Call for Papers
-                    </h3>
-                    <h4 className="text-lg font-bold text-gray-900 mb-2">
-                      Special Issue: Service Economies in a Digital World
-                    </h4>
-                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                      TUES Economics Journal invites submissions on topics including digital platforms, gig work,
-                      tourism, and education services.
-                    </p>
-                    <Link
-                      to={routes.register}
-                      className="block w-full px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors text-center"
-                    >
-                      Submit your manuscript
-                    </Link>
-                  </div>
-
-                  {/* Author Spotlight */}
-                  <div className="border-t border-gray-200 pt-6">
-                    <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">
-                      Author Spotlight
-                    </h3>
-                    <div className="flex items-start gap-3">
                       <img
-                        src="https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=400&q=80"
-                        alt="Dr. Dilshod Karimov"
-                        className="w-16 h-16 rounded-full object-cover"
+                        src={article.image}
+                        alt=""
+                        className="h-24 w-24 shrink-0 object-cover md:h-32 md:w-36"
                       />
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500 mb-1">Research Chair</p>
-                        <p className="text-sm font-bold text-gray-900">Dr. Dilshod Karimov</p>
-                        <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                          Connecting macroeconomic models with on‑the‑ground evidence from border regions and logistics hubs.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </aside>
+                      <span
+                        aria-hidden
+                        className="mt-1 hidden shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500 sm:block"
+                      >
+                        →
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
+
+            <JournalSidebar align="right" />
           </div>
-        </section>
+        </div>
+      </section>
 
-        <PublishedArticlesSection searchQuery={searchQuery} selectedTopic={selectedTopic} />
-      </main>
-
-      <Footer />
-    </div>
+      <PublishedArticlesSection searchQuery={searchQuery} selectedTopic={selectedTopic} />
+    </PublicJournalLayout>
   );
 };
 

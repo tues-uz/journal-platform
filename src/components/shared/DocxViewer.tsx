@@ -51,38 +51,43 @@ export function DocxViewer({ url, fileName, title = "Article document" }: DocxVi
   }, [url]);
 
   return (
-    <section className="space-y-4" aria-label="Document viewer">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-        <div className="flex items-center gap-2 text-sm text-gray-700">
-          <FileText className="h-4 w-4 text-blue-600" />
-          <span className="font-medium">[DOCX]</span>
-          <span className="truncate max-w-[min(100%,20rem)]">{fileName}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="rounded-full">
+    <section aria-label="Document viewer">
+      <div className="border border-gray-200">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2 text-sm text-gray-700">
+            <FileText className="h-4 w-4 shrink-0 text-blue-600" />
+            <span className="font-medium">[DOCX]</span>
+            <span className="truncate font-medium text-gray-900">{fileName}</span>
+          </div>
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="rounded-none border-gray-300 transition-colors hover:border-black hover:bg-black hover:text-white"
+          >
             <a href={url} download={fileName}>
-              <Download className="h-4 w-4 mr-1.5" />
+              <Download className="mr-1.5 h-4 w-4" />
               Download
             </a>
           </Button>
         </div>
+
+        {loading && (
+          <p className="py-8 text-center text-sm text-gray-500">Loading document preview…</p>
+        )}
+
+        {error && (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {error}
+          </div>
+        )}
+
+        <div
+          ref={containerRef}
+          className="docx-viewer max-h-[min(80vh,900px)] overflow-auto bg-white p-4"
+          aria-label={title}
+        />
       </div>
-
-      {loading && (
-        <p className="text-sm text-gray-500 py-8 text-center">Loading document preview…</p>
-      )}
-
-      {error && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {error}
-        </div>
-      )}
-
-      <div
-        ref={containerRef}
-        className="docx-viewer overflow-auto rounded-lg border border-gray-200 bg-white p-4 max-h-[min(80vh,900px)]"
-        aria-label={title}
-      />
     </section>
   );
 }

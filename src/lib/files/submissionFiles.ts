@@ -10,21 +10,31 @@ export const MANUSCRIPT_UPLOAD_ACCEPT: Record<string, string[]> = {
 
 export const MANUSCRIPT_UPLOAD_HINT = "PDF or DOCX, up to 1 file";
 
-export const PUBLICATION_UPLOAD_ACCEPT: Record<string, string[]> = {
-  "application/pdf": [".pdf"],
-  "text/html": [".html", ".htm"],
-  "application/xml": [".xml"],
-  "text/xml": [".xml"],
-  "application/epub+zip": [".epub"],
-  "application/zip": [".zip"],
+export const WORD_UPLOAD_ACCEPT: Record<string, string[]> = {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
   "application/msword": [".doc"],
-  "image/jpeg": [".jpg", ".jpeg"],
-  "image/png": [".png"],
 };
 
-export const PUBLICATION_UPLOAD_HINT =
-  "PDF, HTML, XML, ePub, ZIP, DOCX, JPG, or PNG — each upload creates a new version";
+export const WORD_UPLOAD_HINT = "DOC or DOCX only";
+
+const WORD_EXTENSIONS = new Set(["doc", "docx"]);
+
+export function isWordUploadFile(file: File): boolean {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (WORD_EXTENSIONS.has(extension)) return true;
+
+  return (
+    file.type === "application/msword" ||
+    file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  );
+}
+
+export const PUBLICATION_UPLOAD_ACCEPT: Record<string, string[]> = {
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+  "application/msword": [".doc"],
+};
+
+export const PUBLICATION_UPLOAD_HINT = "DOC or DOCX only — each upload creates a new version";
 
 const COVER_LETTER_ADMIN_ROLES: Role[] = ["publisher_admin", "editorial_staff"];
 
@@ -44,6 +54,9 @@ export function inferPublicationFormat(filename: string): PublicationFileFormat 
       return "xml";
     case "epub":
       return "epub";
+    case "doc":
+    case "docx":
+      return "other";
     case "zip":
       return "supplementary";
     case "jpg":

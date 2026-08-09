@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, AlertCircle, BookOpen } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { AlertCircle, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { JournalLogo } from "@/components/JournalLogo";
 import JournalHeader from "@/components/JournalHeader";
+import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/features/auth/useAuth";
 import { routes } from "@/app/routes";
@@ -16,15 +15,20 @@ import {
 } from "@/features/auth/signInFlow";
 import { authApi } from "@/lib/api/auth";
 import { ApiClientError } from "@/lib/api/client";
-import { SEED_USERS } from "@/lib/store/seed";
+import { SEED_DEMO_AUTHORS, SEED_USERS } from "@/lib/store/seed";
 import { ROLE_LABELS } from "@/lib/rbac/types";
 
-const DEMO_ACCOUNTS = SEED_USERS.filter((u) => u.status === "active").map((u) => ({
-  email: u.email,
-  password: u.password,
-  name: u.name,
-  roles: u.roles.map((r) => ROLE_LABELS[r]).join(", "),
-}));
+const HERO_IMAGE =
+  "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=2000&q=80";
+
+const DEMO_ACCOUNTS = [...SEED_USERS, ...SEED_DEMO_AUTHORS]
+  .filter((u) => u.status === "active")
+  .map((u) => ({
+    email: u.email,
+    password: u.password,
+    name: u.name,
+    roles: u.roles.map((r) => ROLE_LABELS[r]).join(", "),
+  }));
 
 const JournalSignIn = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -110,132 +114,185 @@ const JournalSignIn = () => {
     setEmail(demoEmail);
     setPassword(demoPassword);
     setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
     <div className="min-h-screen bg-white">
       <JournalHeader />
 
-      <main className="pt-16 pb-20 min-h-[100dvh]">
-        <div className="container mx-auto px-6 py-8">
-          <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-12 items-start">
-            <div className="hidden lg:block space-y-6">
-              <div className="inline-flex items-center gap-3">
-                <div className="w-14 h-14 rounded-xl bg-blue-600 flex items-center justify-center">
-                  <BookOpen className="h-7 w-7 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">SJMS</h2>
-                  <p className="text-sm text-gray-600">Scientific Journal Management System</p>
-                </div>
+      <main className="pb-16">
+        <section className="flex min-h-[100dvh] flex-col bg-white">
+          <div className="relative flex flex-[1.05] flex-col justify-end overflow-hidden px-6 pb-10 pt-24 md:px-12 lg:px-16 lg:pb-14">
+            <div className="relative z-10 mx-auto grid w-full max-w-7xl gap-10 md:grid-cols-12 md:items-end md:gap-12">
+              <div className="md:col-span-4">
+                <p className="font-sans text-sm font-semibold text-gray-900">Editorial workspace</p>
+                <p className="mt-3 max-w-xs text-sm leading-relaxed text-gray-600">
+                  Sign in to manage submissions, reviews, and publication for TUES Economics Journal.
+                </p>
+                <Link
+                  to={routes.home}
+                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-gray-900 transition-colors hover:text-gray-700"
+                >
+                  Back to journal
+                  <span aria-hidden>→</span>
+                </Link>
               </div>
-              <h1 className="text-4xl font-bold text-gray-900 leading-tight">
-                Manage the complete publication workflow
-              </h1>
-              <p className="text-gray-600 leading-relaxed max-w-md">
-                Sign in with a demo account below to explore role-based workflows for authors, editors, reviewers, and administrators.
-              </p>
 
-              <div className="pt-6 border-t border-gray-200">
-                <p className="text-sm font-medium text-gray-900 mb-3">Demo accounts</p>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {DEMO_ACCOUNTS.map((acc) => (
-                    <button
-                      key={acc.email}
-                      type="button"
-                      onClick={() => fillDemo(acc.email, acc.password)}
-                      className="w-full text-left p-3 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors"
-                    >
-                      <p className="text-sm font-medium text-gray-900">{acc.name}</p>
-                      <p className="text-xs text-gray-500">{acc.email} · {acc.roles}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="w-full max-w-md mx-auto lg:max-w-lg">
-              <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">Sign in</h1>
-                <p className="text-gray-600 text-sm mb-6">Enter credentials or select a demo account</p>
+              <div className="md:col-span-8">
+                <h1 className="font-serif text-4xl font-bold leading-[1.05] tracking-wide text-black sm:text-5xl md:text-6xl">
+                  Sign in
+                </h1>
+                <p className="mt-4 max-w-xl text-base text-gray-600 md:text-lg">
+                  For authors, editors, reviewers, and editorial staff.
+                </p>
 
                 {error && (
-                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="mt-6 flex max-w-xl items-start gap-3 border border-red-200 bg-red-50 px-4 py-3">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
                     <p className="text-sm text-red-700">{error}</p>
                   </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="staff@journal.com"
-                        value={email}
-                        onChange={(e) => { setEmail(e.target.value); setError(""); }}
-                        className="pl-10 h-11 rounded-xl"
-                        required
-                      />
-                    </div>
-                  </div>
+                <form onSubmit={handleSubmit} className="mt-8 max-w-xl space-y-5">
+                  <label className="group flex items-center gap-3 border-b border-gray-900/15 pb-3 transition-colors focus-within:border-oxford-blue">
+                    <span className="sr-only">Email</span>
+                    <Mail
+                      className="h-5 w-5 shrink-0 text-gray-400 transition-colors group-focus-within:text-oxford-blue"
+                      aria-hidden
+                    />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setError("");
+                      }}
+                      placeholder="Email address"
+                      autoComplete="email"
+                      required
+                      className="min-w-0 flex-1 border-0 bg-transparent py-2 text-lg leading-none text-gray-900 outline-none placeholder:text-gray-400"
+                    />
+                  </label>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                      <Input
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Enter password"
-                        value={password}
-                        onChange={(e) => { setPassword(e.target.value); setError(""); }}
-                        className="pl-10 pr-10 h-11 rounded-xl"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                      </button>
-                    </div>
-                  </div>
+                  <label className="group flex items-center gap-3 border-b border-gray-900/15 pb-3 transition-colors focus-within:border-oxford-blue">
+                    <span className="sr-only">Password</span>
+                    <Lock
+                      className="h-5 w-5 shrink-0 text-gray-400 transition-colors group-focus-within:text-oxford-blue"
+                      aria-hidden
+                    />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setError("");
+                      }}
+                      placeholder="Password"
+                      autoComplete="current-password"
+                      required
+                      className="min-w-0 flex-1 border-0 bg-transparent py-2 text-lg leading-none text-gray-900 outline-none placeholder:text-gray-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="shrink-0 text-gray-400 transition-colors hover:text-gray-700"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
+                  </label>
 
-                  <Button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700"
-                  >
-                    {isLoading ? redirectFeedback.label : "Sign In"}
-                  </Button>
+                  <div className="flex flex-col gap-4 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="inline-flex shrink-0 items-center justify-center rounded-full bg-[#1a3a2f] px-8 py-3 text-sm font-medium text-white transition-colors hover:bg-[#142e26] disabled:opacity-70"
+                    >
+                      {isLoading ? redirectFeedback.label : "Sign in"}
+                    </button>
+                    <Link
+                      to={routes.register}
+                      className="text-sm font-medium text-gray-600 transition-colors hover:text-gray-900"
+                    >
+                      New author? Create an account →
+                    </Link>
+                  </div>
 
                   {isLoading && (
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-1 max-w-xl overflow-hidden bg-gray-100">
                       <div
-                        className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                        className="h-full bg-[#1a3a2f] transition-all duration-300"
                         style={{ width: `${displayProgress}%` }}
                       />
                     </div>
                   )}
                 </form>
-
-                <p className="mt-6 text-center text-sm text-gray-600">
-                  New author?{" "}
-                  <Link to={routes.register} className="text-blue-600 font-medium hover:underline">
-                    Create an account
-                  </Link>
-                </p>
               </div>
             </div>
           </div>
-        </div>
+
+          <div className="relative h-[40%] min-h-[200px] overflow-hidden bg-oxford-dark">
+            <img
+              src={HERO_IMAGE}
+              alt=""
+              className="h-full w-full object-cover animate-hero-image-zoom"
+            />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+            <JournalLogo
+              alt=""
+              className="absolute bottom-6 left-6 h-10 w-auto drop-shadow-md md:bottom-8 md:left-10 md:h-11"
+            />
+          </div>
+        </section>
+
+        <section className="bg-white px-6 py-20 md:py-28">
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-8 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-sm font-semibold tracking-wide text-gray-500 uppercase">Demo</p>
+                <h2 className="mt-1 font-serif text-3xl font-bold tracking-wide text-black md:text-4xl">
+                  Try a role
+                </h2>
+              </div>
+              <p className="max-w-md text-sm leading-relaxed text-gray-600">
+                Pick an account to pre-fill the form above, then sign in.
+              </p>
+            </div>
+
+            <ul className="grid gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
+              {DEMO_ACCOUNTS.map((acc) => (
+                <li key={acc.email}>
+                  <button
+                    type="button"
+                    onClick={() => fillDemo(acc.email, acc.password)}
+                    className="group flex w-full items-center justify-between border-b border-gray-200 py-3.5 text-left transition-colors hover:border-gray-400"
+                  >
+                    <span className="min-w-0 pr-3">
+                      <span className="block text-sm font-medium text-gray-900 group-hover:text-black">
+                        {acc.name}
+                      </span>
+                      <span className="mt-1 block truncate text-xs text-gray-500">{acc.roles}</span>
+                    </span>
+                    <span
+                      aria-hidden
+                      className="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500"
+                    >
+                      →
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
       </main>
+
+      <Footer />
     </div>
   );
 };

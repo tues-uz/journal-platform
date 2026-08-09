@@ -1,4 +1,6 @@
 import { apiRequest } from "@/lib/api/client";
+import { fromNumericIssueId, fromNumericVolumeId } from "@/lib/demo/ids";
+import { isDemoMode } from "@/lib/demo/mode";
 
 interface IssueDto {
   id: number;
@@ -23,9 +25,13 @@ export interface ManagedIssue {
 }
 
 function mapIssueDto(dto: IssueDto): ManagedIssue {
+  const id = isDemoMode() ? fromNumericIssueId(dto.id) ?? String(dto.id) : String(dto.id);
+  const volumeId = isDemoMode()
+    ? fromNumericVolumeId(dto.volumeId) ?? String(dto.volumeId)
+    : String(dto.volumeId);
   return {
-    id: String(dto.id),
-    volumeId: String(dto.volumeId),
+    id,
+    volumeId,
     number: dto.number,
     title: dto.title ?? undefined,
     status: dto.status.toLowerCase() as ManagedIssue["status"],

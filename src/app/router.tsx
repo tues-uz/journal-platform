@@ -6,6 +6,14 @@ import { routes } from "@/app/routes";
 const Journal = lazy(() => import("@/pages/Journal"));
 const ArticlePage = lazy(() => import("@/pages/ArticlePage"));
 const JournalPlaceholder = lazy(() => import("@/pages/JournalPlaceholder"));
+const JournalTopicsPage = lazy(() => import("@/pages/JournalTopicsPage"));
+const JournalStaticContentPage = lazy(() => import("@/pages/JournalStaticContentPage"));
+const JournalSearchPage = lazy(() => import("@/pages/JournalSearchPage"));
+const JournalCurrentIssuePage = lazy(() => import("@/pages/JournalCurrentIssuePage"));
+const JournalArchivesPage = lazy(() => import("@/pages/JournalArchivesPage"));
+const JournalArchiveIssuePage = lazy(() => import("@/pages/JournalArchiveIssuePage"));
+const JournalAnnouncementsPage = lazy(() => import("@/pages/JournalAnnouncementsPage"));
+const JournalEditorialTeamPage = lazy(() => import("@/pages/JournalEditorialTeamPage"));
 const JournalSignIn = lazy(() => import("@/pages/JournalSignIn"));
 const JournalRegister = lazy(() => import("@/pages/JournalRegister"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
@@ -27,6 +35,7 @@ const VolumesPage = lazy(() => import("@/pages/VolumesPage"));
 const DoiManagementPage = lazy(() => import("@/pages/DoiManagementPage"));
 const AdminPaymentsPage = lazy(() => import("@/pages/AdminPaymentsPage"));
 const AuthorPaymentPage = lazy(() => import("@/pages/AuthorPaymentPage"));
+const AuthorPaymentDetailPage = lazy(() => import("@/pages/AuthorPaymentDetailPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
@@ -48,8 +57,19 @@ export function AppRouter() {
       <Route path="/article/:id" element={withSuspense(<ArticlePage />)} />
       <Route path={routes.articles} element={withSuspense(<JournalPlaceholder />)} />
       <Route path={routes.authors} element={withSuspense(<JournalPlaceholder />)} />
-      <Route path={routes.topics} element={withSuspense(<JournalPlaceholder />)} />
-      <Route path={routes.about} element={withSuspense(<JournalPlaceholder />)} />
+      <Route path={routes.topics} element={withSuspense(<JournalTopicsPage />)} />
+      <Route path={routes.about} element={withSuspense(<JournalStaticContentPage kind="about" />)} />
+      <Route path={routes.search} element={withSuspense(<JournalSearchPage />)} />
+      <Route path={routes.current} element={withSuspense(<JournalCurrentIssuePage />)} />
+      <Route path={routes.archives} element={withSuspense(<JournalArchivesPage />)} />
+      <Route path="/archives/:issueSlug" element={withSuspense(<JournalArchiveIssuePage />)} />
+      <Route path={routes.announcements} element={withSuspense(<JournalAnnouncementsPage />)} />
+      <Route path={routes.editorialTeam} element={withSuspense(<JournalEditorialTeamPage />)} />
+      <Route path="/policies/:slug" element={withSuspense(<JournalStaticContentPage kind="policy" />)} />
+      <Route
+        path="/information/:slug"
+        element={withSuspense(<JournalStaticContentPage kind="information" />)}
+      />
 
       <Route path={routes.signin} element={withSuspense(<JournalSignIn />)} />
       <Route path={routes.register} element={withSuspense(<JournalRegister />)} />
@@ -106,6 +126,10 @@ export function AppRouter() {
         <Route path={routes.users} element={withSuspense(<UsersPage />)} />
       </Route>
       <Route element={<ProtectedRoute module="author_payment" />}>
+        <Route
+          path={`${routes.payment}/:submissionId`}
+          element={withSuspense(<AuthorPaymentDetailPage />)}
+        />
         <Route path={routes.payment} element={withSuspense(<AuthorPaymentPage />)} />
         <Route path={routes.payments} element={withSuspense(<AdminPaymentsPage />)} />
       </Route>

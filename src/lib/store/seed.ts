@@ -11,7 +11,7 @@ import type {
 } from "@/lib/store/types";
 
 /** Bump when seed shape changes so persisted localStorage picks up new demo data. */
-export const SEED_VERSION = 11;
+export const SEED_VERSION = 18;
 
 /** Staff demo accounts only — authors self-register and create their own submissions. */
 export const SEED_USERS: StoreUser[] = [
@@ -24,16 +24,6 @@ export const SEED_USERS: StoreUser[] = [
     status: "active",
     institution: "TUES Journal",
     lastLogin: "2026-07-18T08:00:00Z",
-  },
-  {
-    id: "user-staff",
-    name: "Maria Staff",
-    email: "staff@journal.com",
-    password: "staff123",
-    roles: ["editorial_staff"],
-    status: "active",
-    institution: "TUES Journal Office",
-    lastLogin: "2026-07-18T10:15:00Z",
   },
   {
     id: "user-eic",
@@ -56,6 +46,26 @@ export const SEED_USERS: StoreUser[] = [
     lastLogin: "2026-07-19T08:30:00Z",
   },
   {
+    id: "user-he2",
+    name: "Dr. Second Editor",
+    email: "editor2@journal.com",
+    password: "editor123",
+    roles: ["handling_editor"],
+    status: "active",
+    institution: "Faculty of Business",
+    lastLogin: "2026-07-19T07:45:00Z",
+  },
+  {
+    id: "user-he3",
+    name: "Dr. Third Editor",
+    email: "editor3@journal.com",
+    password: "editor123",
+    roles: ["handling_editor"],
+    status: "active",
+    institution: "School of Public Policy",
+    lastLogin: "2026-07-18T14:20:00Z",
+  },
+  {
     id: "user-reviewer",
     name: "Dr. Peer Reviewer",
     email: "reviewer@journal.com",
@@ -66,21 +76,21 @@ export const SEED_USERS: StoreUser[] = [
     lastLogin: "2026-07-18T16:00:00Z",
   },
   {
-    id: "user-copy",
-    name: "Alex Copyeditor",
-    email: "copy@journal.com",
-    password: "copy123",
-    roles: ["copyeditor"],
+    id: "user-reviewer2",
+    name: "Dr. Second Reviewer",
+    email: "reviewer2@journal.com",
+    password: "reviewer123",
+    roles: ["reviewer"],
     status: "active",
-    institution: "TUES Journal",
-    lastLogin: "2026-07-17T11:00:00Z",
+    institution: "National Economics Lab",
+    lastLogin: "2026-07-18T16:00:00Z",
   },
   {
-    id: "user-layout",
-    name: "Sam Layout",
-    email: "layout@journal.com",
-    password: "layout123",
-    roles: ["layout_editor"],
+    id: "user-production",
+    name: "Pat Production",
+    email: "production@journal.com",
+    password: "production123",
+    roles: ["production_editor"],
     status: "active",
     institution: "TUES Journal",
     lastLogin: "2026-07-16T13:45:00Z",
@@ -130,7 +140,7 @@ export const SEED_SUBMISSIONS: Submission[] = [
     keywords: ["corporate governance", "firm performance", "ASEAN"],
     language: "English",
     articleType: "Research Article",
-    status: "administrative_review",
+    status: "submitted",
     authorId: "user-author",
     authors: [
       {
@@ -316,6 +326,7 @@ export const SEED_SUBMISSIONS: Submission[] = [
     language: "English",
     articleType: "Research Article",
     status: "production",
+    acceptancePaymentVerified: true,
     authorId: "user-author",
     authors: [
       {
@@ -326,7 +337,7 @@ export const SEED_SUBMISSIONS: Submission[] = [
       },
     ],
     handlingEditorId: "user-he",
-    layoutEditorId: "user-layout",
+    layoutEditorId: "user-production",
     layoutAssignedAt: "2026-07-10T09:00:00Z",
     layoutStartedAt: "2026-07-12T09:00:00Z",
     proofReady: true,
@@ -354,7 +365,7 @@ export const SEED_SUBMISSIONS: Submission[] = [
     keywords: ["fintech", "micro-enterprise", "technology adoption"],
     language: "English",
     articleType: "Research Article",
-    status: "accepted",
+    status: "payment_pending",
     authorId: "user-multi",
     authors: [
       {
@@ -467,6 +478,7 @@ export const SEED_SUBMISSIONS: Submission[] = [
     language: "English",
     articleType: "Review Article",
     status: "production",
+    acceptancePaymentVerified: true,
     authorId: "user-author",
     authors: [
       {
@@ -477,13 +489,10 @@ export const SEED_SUBMISSIONS: Submission[] = [
       },
     ],
     handlingEditorId: "user-he",
-    layoutEditorId: "user-layout",
+    layoutEditorId: "user-production",
     layoutAssignedAt: "2026-07-19T09:00:00Z",
     layoutDueDate: "2026-07-26T09:00:00Z",
-    copyeditorId: "user-copy",
-    copyeditedAt: "2026-07-18T14:00:00Z",
-    copyeditNotes:
-      "Applied journal style guide. Figure 3 redrawn per author request. Verify table alignment in layout.",
+    productionNotes: "Apply journal style guide. Verify table alignment in layout.",
     proofReady: false,
     proofApproved: false,
     plagiarismStatus: "passed",
@@ -497,13 +506,6 @@ export const SEED_SUBMISSIONS: Submission[] = [
         type: "manuscript",
         size: 524_288,
         uploadedAt: "2026-07-01T10:00:00Z",
-      },
-      {
-        id: "file-011-copyedit",
-        name: "SJMS-2026-011-copyedit.pdf",
-        type: "copyedit",
-        size: 531_000,
-        uploadedAt: "2026-07-18T14:00:00Z",
       },
     ],
     createdAt: "2026-07-01T10:00:00Z",
@@ -573,23 +575,6 @@ export const SEED_PAYMENT_SETTINGS: PaymentSettings = {
 
 export const SEED_PAYMENTS: PaymentRequest[] = [
   {
-    id: "pay-author-001",
-    authorId: "user-author",
-    amount: 500000,
-    currency: "IDR",
-    status: "approved",
-    proofFile: {
-      id: "proof-author-001",
-      name: "payment-receipt-author.pdf",
-      size: 102_400,
-      uploadedAt: "2026-07-15T10:00:00Z",
-    },
-    referenceNote: "Jane Author — July submission fee",
-    submittedAt: "2026-07-15T10:00:00Z",
-    reviewedAt: "2026-07-15T14:00:00Z",
-    reviewedBy: "user-admin",
-  },
-  {
     id: "pay-author-002",
     authorId: "user-multi",
     amount: 500000,
@@ -630,17 +615,17 @@ export const SEED_ACTIVITIES: ActivityEntry[] = [
     actorId: "user-author",
     actorName: "Dr. Jane Author",
     actorRoles: ["author"],
-    statusAfter: "administrative_review",
+    statusAfter: "submitted",
     timestamp: "2026-07-20T07:00:00Z",
-    details: "Awaiting administrative screening",
+    details: "Awaiting editor assignment",
   },
   {
     id: "act-003",
     submissionId: "sub-003",
-    action: "Status changed to assigned",
-    actorId: "user-staff",
-    actorName: "Maria Staff",
-    actorRoles: ["editorial_staff"],
+    action: "Handling Editor Assigned",
+    actorId: "user-eic",
+    actorName: "Prof. Chief Editor",
+    actorRoles: ["editor_in_chief"],
     statusAfter: "assigned",
     timestamp: "2026-07-19T11:00:00Z",
     details: "Passed administrative screening",
@@ -734,7 +719,7 @@ export const SEED_ACTIVITIES: ActivityEntry[] = [
 export const SEED_NOTIFICATIONS: Notification[] = [
   {
     id: "notif-021",
-    userId: "user-layout",
+    userId: "user-production",
     title: "Layout Assignment",
     message: "SJMS-2026-011 has been assigned to you for layout.",
     read: false,
@@ -743,9 +728,9 @@ export const SEED_NOTIFICATIONS: Notification[] = [
   },
   {
     id: "notif-017",
-    userId: "user-staff",
-    title: "New Submission for Screening",
-    message: "SJMS-2026-001 requires administrative screening.",
+    userId: "user-eic",
+    title: "New Submission",
+    message: "SJMS-2026-001 awaits handling editor assignment.",
     read: false,
     createdAt: "2026-07-20T07:00:00Z",
     link: "/dashboard/submissions/sub-001",
@@ -790,7 +775,7 @@ export const SEED_NOTIFICATIONS: Notification[] = [
 
 /** Demo-only IDs removed on migrate — real author accounts and submissions are kept. */
 export const SEED_DEMO_AUTHOR_IDS = new Set(["user-author", "user-multi"]);
-export const SEED_DEMO_PAYMENT_IDS = new Set(["pay-author-001", "pay-author-002"]);
+export const SEED_DEMO_PAYMENT_IDS = new Set(["pay-author-002"]);
 export const SEED_DEMO_SUBMISSION_IDS = new Set([
   "sub-001",
   "sub-002",
@@ -808,16 +793,58 @@ export const SEED_DEMO_SUBMISSION_IDS = new Set([
   "sub-014",
 ]);
 
+export function mergeMissingSeedStaff(users: StoreUser[]): StoreUser[] {
+  const knownEmails = new Set(users.map((user) => user.email.toLowerCase()));
+  const knownIds = new Set(users.map((user) => user.id));
+  const missing = SEED_USERS.filter(
+    (seedUser) =>
+      !knownEmails.has(seedUser.email.toLowerCase()) && !knownIds.has(seedUser.id),
+  );
+  return missing.length > 0 ? [...users, ...missing] : users;
+}
+
+/** Move manuscripts back to payment_pending when APC was skipped while payments are enabled. */
+export function repairUnpaidProductionSubmissions(state: AppStore): AppStore {
+  if (!state.paymentSettings.enabled) return state;
+
+  let changed = false;
+  const submissions = state.submissions.map((submission) => {
+    if (
+      submission.acceptancePaymentVerified === true ||
+      submission.status === "payment_pending" ||
+      submission.status === "published" ||
+      submission.status === "scheduled"
+    ) {
+      return submission;
+    }
+
+    if (submission.status !== "production" && submission.status !== "accepted") {
+      return submission;
+    }
+
+    changed = true;
+    return {
+      ...submission,
+      status: "payment_pending" as const,
+      acceptancePaymentVerified: false,
+      layoutStartedAt: undefined,
+      layoutAssignedAt: undefined,
+      layoutEditorId: undefined,
+      layoutDueDate: undefined,
+      proofReady: false,
+      proofApproved: false,
+      productionNotes: undefined,
+    };
+  });
+
+  return changed ? { ...state, submissions } : state;
+}
+
 export function stripSeedDemoData(state: AppStore): AppStore {
-  const users = [
+  const users = mergeMissingSeedStaff([
     ...state.users.filter((u) => !SEED_DEMO_AUTHOR_IDS.has(u.id)),
-    ...SEED_USERS.filter(
-      (seedUser) => !state.users.some((u) => u.email === seedUser.email),
-    ),
-    ...SEED_DEMO_AUTHORS.filter(
-      (seedAuthor) => !state.users.some((u) => u.email === seedAuthor.email),
-    ),
-  ];
+    ...SEED_DEMO_AUTHORS,
+  ]);
   const userIds = new Set(users.map((u) => u.id));
 
   const submissions = [
@@ -871,10 +898,10 @@ export function stripSeedDemoData(state: AppStore): AppStore {
 
 /** Assigns the first active layout editor to production submissions missing one. */
 export function repairProductionAssignments(state: AppStore): AppStore {
-  const layoutEditor = state.users.find(
-    (u) => u.status === "active" && u.roles.includes("layout_editor"),
+  const productionEditor = state.users.find(
+    (u) => u.status === "active" && u.roles.includes("production_editor"),
   );
-  if (!layoutEditor) return state;
+  if (!productionEditor) return state;
 
   const now = new Date().toISOString();
   let changed = false;
@@ -883,7 +910,7 @@ export function repairProductionAssignments(state: AppStore): AppStore {
       changed = true;
       return {
         ...submission,
-        layoutEditorId: layoutEditor.id,
+        layoutEditorId: productionEditor.id,
         layoutAssignedAt: submission.layoutAssignedAt ?? now,
       };
     }
