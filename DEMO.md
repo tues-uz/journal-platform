@@ -118,7 +118,9 @@ No revisions, no rejections. Sign out and sign back in between steps when switch
 
 ---
 
-### Step 6 — Author pays APC
+### Step 6 — Author pays APC *(production deployments only)*
+
+> **Demo mode skips this step.** After HE approval, the manuscript moves to **accepted** and layout can start immediately.
 
 | | |
 | --- | --- |
@@ -133,7 +135,7 @@ No revisions, no rejections. Sign out and sign back in between steps when switch
 
 ---
 
-### Step 7 — Admin verifies payment
+### Step 7 — Admin verifies payment *(production deployments only)*
 
 | | |
 | --- | --- |
@@ -147,7 +149,9 @@ No revisions, no rejections. Sign out and sign back in between steps when switch
 
 ---
 
-### Step 8 — HE layout and sends proof
+### Step 6 (demo) — HE layout and sends proof
+
+Skip steps 6–7 above in demo. After Step 5 approval, continue here:
 
 | | |
 | --- | --- |
@@ -164,7 +168,7 @@ No revisions, no rejections. Sign out and sign back in between steps when switch
 
 ---
 
-### Step 9 — Author approves proof
+### Step 7 (demo) — Author approves proof
 
 | | |
 | --- | --- |
@@ -178,7 +182,7 @@ No revisions, no rejections. Sign out and sign back in between steps when switch
 
 ---
 
-### Step 10 — Admin publishes
+### Step 8 (demo) — Admin publishes
 
 | | |
 | --- | --- |
@@ -202,11 +206,10 @@ No revisions, no rejections. Sign out and sign back in between steps when switch
 | 4a | `reviewer@journal.com` | `reviewer123` | Accept + submit review |
 | 4b | `reviewer2@journal.com` | `reviewer123` | Accept + submit review |
 | 5 | `editor@journal.com` | `editor123` | Approve for publication |
-| 6 | `author@journal.com` | `author123` | Pay APC |
-| 7 | `admin@journal.com` | `admin123` | Verify payment |
-| 8 | `editor@journal.com` | `editor123` | Layout + send proof |
-| 9 | `author@journal.com` | `author123` | Approve proof |
-| 10 | `admin@journal.com` | `admin123` | Publish |
+| 6–7 | — | — | *(Demo skips APC — go to layout)* |
+| 6 | `editor@journal.com` | `editor123` | Layout + send proof (demo) |
+| 7 | `author@journal.com` | `author123` | Approve proof (demo) |
+| 8 | `admin@journal.com` | `admin123` | Publish (demo) |
 
 ---
 
@@ -216,5 +219,6 @@ No revisions, no rejections. Sign out and sign back in between steps when switch
 - **Handling editor** owns pre-screening, reviewer assignment, editorial decisions, layout, and scheduling
 - **Minimum two reviewers** before the handling editor can decide after peer review
 - **Author revisions** return to the handling editor (no EiC approval loop) — skipped in happy path above
-- **Payment** after HE approval, before layout/production
-- **Publisher / Admin** verifies payment and performs final publish
+- **Submission is free** — no upfront author payment to submit
+- **APC** applies only after editorial acceptance in production; **disabled in demo mode**
+- **Publisher / Admin** verifies payment (production) and performs final publish

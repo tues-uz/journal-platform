@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { routes } from "@/app/routes";
 import type { Role } from "@/lib/rbac/types";
-import { SEED_DATA, SEED_VERSION, mergeMissingSeedStaff, repairProductionAssignments, repairUnpaidProductionSubmissions, stripSeedDemoData } from "@/lib/store/seed";
+import { SEED_DATA, SEED_VERSION, applyDemoPaymentPolicy, mergeMissingSeedStaff, repairApprovedPaymentSubmissions, repairProductionAssignments, repairUnpaidProductionSubmissions, stripSeedDemoData } from "@/lib/store/seed";
+import { isDemoMode } from "@/lib/demo/mode";
 import type {
   ActivityEntry,
   Notification,
@@ -847,7 +848,7 @@ export const useJournalStore = create<JournalStore>()(
           return false;
         }
 
-        if (paymentEnabled) {
+        if (paymentEnabled && !isDemoMode()) {
           if (
             submission.status !== "production" ||
             submission.acceptancePaymentVerified !== true
@@ -964,10 +965,11 @@ export const useJournalStore = create<JournalStore>()(
         const submission = get().submissions.find((s) => s.id === id);
         const now = new Date().toISOString();
 
-        let resolvedStatus =
-          status === "accepted" && submission && get().paymentSettings.enabled
-            ? "payment_pending"
-            : status;
+        let resolvedStatus = status;
+        if (status === "accepted" && submission) {
+          const apcRequired = get().paymentSettings.enabled && !isDemoMode();
+          resolvedStatus = apcRequired ? "payment_pending" : status;
+        }
 
         const handlingEditorId = submission ? getHandlingEditorIds(submission)[0] : undefined;
         const layoutAssigneeId = submission?.layoutEditorId ?? handlingEditorId;
@@ -1271,33 +1273,41 @@ export const useJournalStore = create<JournalStore>()(
           const state = persistedState as Partial<typeof SEED_DATA>;
           const base =
             version >= 2
-              ? repairUnpaidProductionSubmissions(
-                  repairProductionAssignments(
-                  stripSeedDemoData({
-                  ...SEED_DATA,
-                  ...state,
-                  users: state.users ?? SEED_DATA.users,
-                  submissions: state.submissions ?? SEED_DATA.submissions,
-                  activities: state.activities ?? SEED_DATA.activities,
-                  notifications: state.notifications ?? SEED_DATA.notifications,
-                  volumes: state.volumes ?? SEED_DATA.volumes,
-                  journalSettings: state.journalSettings ?? SEED_DATA.journalSettings,
-                  payments: state.payments ?? SEED_DATA.payments,
-                  paymentSettings: state.paymentSettings ?? SEED_DATA.paymentSettings,
-                } as typeof SEED_DATA),
-                ),
+              ? applyDemoPaymentPolicy(
+                  repairApprovedPaymentSubmissions(
+                    repairUnpaidProductionSubmissions(
+                      repairProductionAssignments(
+                        stripSeedDemoData({
+                          ...SEED_DATA,
+                          ...state,
+                          users: state.users ?? SEED_DATA.users,
+                          submissions: state.submissions ?? SEED_DATA.submissions,
+                          activities: state.activities ?? SEED_DATA.activities,
+                          notifications: state.notifications ?? SEED_DATA.notifications,
+                          volumes: state.volumes ?? SEED_DATA.volumes,
+                          journalSettings: state.journalSettings ?? SEED_DATA.journalSettings,
+                          payments: state.payments ?? SEED_DATA.payments,
+                          paymentSettings: state.paymentSettings ?? SEED_DATA.paymentSettings,
+                        } as typeof SEED_DATA),
+                      ),
+                    ),
+                  ),
                 )
-              : repairUnpaidProductionSubmissions(repairProductionAssignments({ ...SEED_DATA }));
-          return {
+              : applyDemoPaymentPolicy(
+                  repairApprovedPaymentSubmissions(
+                    repairUnpaidProductionSubmissions(repairProductionAssignments({ ...SEED_DATA })),
+                  ),
+                );
+          return applyDemoPaymentPolicy({
             ...base,
             users: mergeMissingSeedStaff(base.users),
-          };
+          });
         }
         const state = persistedState as typeof SEED_DATA;
-        return {
-          ...state,
+        return applyDemoPaymentPolicy({
+          ...repairApprovedPaymentSubmissions(state),
           users: mergeMissingSeedStaff(state.users ?? SEED_DATA.users),
-        };
+        });
       },
       partialize: (state) => ({
         users: state.users,

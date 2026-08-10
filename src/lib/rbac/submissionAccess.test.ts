@@ -14,9 +14,18 @@ const baseSubmission: Submission = {
   authorId: "user-author",
   authors: [],
   handlingEditorId: "user-he",
-  reviewerId: "user-reviewer",
-  reviewerInvitationStatus: "accepted",
-  reviewSubmitted: true,
+  reviewers: [
+    {
+      reviewerId: "user-reviewer",
+      invitationStatus: "accepted",
+      reviewSubmitted: true,
+    },
+    {
+      reviewerId: "user-reviewer2",
+      invitationStatus: "accepted",
+      reviewSubmitted: true,
+    },
+  ],
   files: [],
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-02T00:00:00Z",

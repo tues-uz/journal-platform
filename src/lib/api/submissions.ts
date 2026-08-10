@@ -16,6 +16,7 @@ import {
   fromNumericVolumeId,
 } from "@/lib/demo/ids";
 import { isDemoMode } from "@/lib/demo/mode";
+import type { SubmissionApcState } from "@/lib/payment/access";
 
 interface SubmissionFileDto {
   id: number;
@@ -61,6 +62,7 @@ export interface SubmissionDto {
   proofReady: boolean;
   proofApproved: boolean;
   acceptancePaymentVerified?: boolean;
+  apcPaymentState?: string | null;
   reviewSubmitted: boolean;
   decisionReason: string | null;
   reviewComments: string | null;
@@ -179,6 +181,9 @@ export function mapSubmissionDto(dto: SubmissionDto): Submission {
     proofReady: dto.proofReady,
     proofApproved: dto.proofApproved,
     acceptancePaymentVerified: dto.acceptancePaymentVerified ?? false,
+    apcPaymentState: dto.apcPaymentState
+      ? (lower<SubmissionApcState>(dto.apcPaymentState) ?? undefined)
+      : undefined,
     reviewSubmitted: dto.reviewSubmitted,
     decisionReason: dto.decisionReason ?? undefined,
     reviewComments: dto.reviewComments ?? undefined,

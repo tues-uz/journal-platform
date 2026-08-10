@@ -32,6 +32,7 @@ import {
 
 import { getHandlingEditorIds } from "@/lib/workflow/handlingEditors";
 import { getReviewerSlots } from "@/lib/workflow/reviewers";
+import { getSubmissionApcState, type SubmissionApcState } from "@/lib/payment/access";
 
 function upper(value: string | undefined): string | null {
   return value ? value.toUpperCase() : null;
@@ -103,6 +104,7 @@ export function submissionToDto(submission: Submission): SubmissionDto {
     proofReady: submission.proofReady ?? false,
     proofApproved: submission.proofApproved ?? false,
     acceptancePaymentVerified: submission.acceptancePaymentVerified ?? false,
+    apcPaymentState: getSubmissionApcState(submission, state.payments).toUpperCase(),
     reviewSubmitted: submission.reviewSubmitted ?? false,
     decisionReason: submission.decisionReason ?? null,
     reviewComments: submission.reviewComments ?? null,

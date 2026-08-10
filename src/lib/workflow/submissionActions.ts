@@ -1,4 +1,6 @@
 import type { Role } from "@/lib/rbac/types";
+import type { SubmissionApcState } from "@/lib/payment/access";
+import { getPaymentPendingAssigneePrefix } from "@/lib/payment/access";
 import type { Submission, SubmissionStatus } from "@/lib/store/types";
 import { getHandlingEditorIds, hasHandlingEditors, isHandlingEditorOnSubmission } from "@/lib/workflow/handlingEditors";
 import { allRequiredReviewsComplete } from "@/lib/workflow/reviewers";
@@ -61,7 +63,13 @@ export interface SubmissionAssignee {
 export function getSubmissionAssignee(
   submission: Pick<
     Submission,
-    "status" | "authorId" | "handlingEditorId" | "handlingEditorIds" | "reviewerId" | "layoutEditorId"
+    | "status"
+    | "authorId"
+    | "handlingEditorId"
+    | "handlingEditorIds"
+    | "reviewerId"
+    | "layoutEditorId"
+    | "apcPaymentState"
   >,
   getUserById: (id: string) => { name: string; roles: Role[] } | undefined,
 ): SubmissionAssignee | undefined {
@@ -100,7 +108,7 @@ export function getSubmissionAssignee(
           : submission.status === "eic_approval_pending"
             ? "Revision review with"
             : submission.status === "payment_pending"
-              ? "Payment due for"
+              ? getPaymentPendingAssigneePrefix(submission.apcPaymentState as SubmissionApcState | undefined)
               : "Draft with";
       return {
         prefix,

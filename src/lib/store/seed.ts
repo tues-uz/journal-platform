@@ -9,9 +9,11 @@ import type {
   StoreUser,
   Volume,
 } from "@/lib/store/types";
+import { isDemoMode } from "@/lib/demo/mode";
+import { getHandlingEditorIds } from "@/lib/workflow/handlingEditors";
 
 /** Bump when seed shape changes so persisted localStorage picks up new demo data. */
-export const SEED_VERSION = 19;
+export const SEED_VERSION = 21;
 
 /** Staff demo accounts only — authors self-register and create their own submissions. */
 export const SEED_USERS: StoreUser[] = [
@@ -365,7 +367,8 @@ export const SEED_SUBMISSIONS: Submission[] = [
     keywords: ["fintech", "micro-enterprise", "technology adoption"],
     language: "English",
     articleType: "Research Article",
-    status: "payment_pending",
+    status: "production",
+    acceptancePaymentVerified: true,
     authorId: "user-multi",
     authors: [
       {
@@ -803,6 +806,57 @@ export function mergeMissingSeedStaff(users: StoreUser[]): StoreUser[] {
   return missing.length > 0 ? [...users, ...missing] : users;
 }
 
+/** Demo/local mode: submission is free; APC is not required before layout. */
+export function applyDemoPaymentPolicy(state: AppStore): AppStore {
+  if (!isDemoMode()) return state;
+
+  let changed = state.paymentSettings.enabled;
+  const paymentSettings = { ...state.paymentSettings, enabled: false };
+
+  const submissions = state.submissions.map((submission) => {
+    if (submission.status !== "payment_pending") return submission;
+    changed = true;
+    return {
+      ...submission,
+      status: "accepted" as const,
+      acceptancePaymentVerified: false,
+    };
+  });
+
+  if (!changed) return state;
+  return { ...state, paymentSettings, submissions };
+}
+
+/** Clear payment_pending when the author already has an approved APC proof. */
+export function repairApprovedPaymentSubmissions(state: AppStore): AppStore {
+  const approvedByAuthor = new Map<string, string>();
+  for (const payment of state.payments) {
+    if (payment.status === "approved") {
+      approvedByAuthor.set(payment.authorId, payment.reviewedAt ?? payment.submittedAt);
+    }
+  }
+  if (approvedByAuthor.size === 0) return state;
+
+  let changed = false;
+  const submissions = state.submissions.map((submission) => {
+    if (submission.status !== "payment_pending") return submission;
+    const reviewedAt = approvedByAuthor.get(submission.authorId);
+    if (!reviewedAt) return submission;
+
+    changed = true;
+    const handlingEditorId = getHandlingEditorIds(submission)[0];
+    return {
+      ...submission,
+      status: "production" as const,
+      acceptancePaymentVerified: true,
+      layoutEditorId: submission.layoutEditorId ?? handlingEditorId,
+      layoutAssignedAt: submission.layoutAssignedAt ?? reviewedAt,
+    };
+  });
+
+  return changed ? { ...state, submissions } : state;
+}
+
 /** Move manuscripts back to payment_pending when APC was skipped while payments are enabled. */
 export function repairUnpaidProductionSubmissions(state: AppStore): AppStore {
   if (!state.paymentSettings.enabled) return state;
@@ -921,7 +975,7 @@ export function repairProductionAssignments(state: AppStore): AppStore {
   return { ...state, submissions };
 }
 
-export const SEED_DATA: AppStore = {
+export const SEED_DATA: AppStore = applyDemoPaymentPolicy({
   users: [...SEED_USERS, ...SEED_DEMO_AUTHORS],
   submissions: SEED_SUBMISSIONS,
   activities: SEED_ACTIVITIES,
@@ -930,7 +984,7 @@ export const SEED_DATA: AppStore = {
   journalSettings: SEED_JOURNAL_SETTINGS,
   payments: SEED_PAYMENTS,
   paymentSettings: SEED_PAYMENT_SETTINGS,
-};
+});
 
 /**
  * Role → sidebar menu coverage (PRD-aligned):

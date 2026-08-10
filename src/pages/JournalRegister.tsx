@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, BookOpen, User, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +21,6 @@ import {
 } from "@/features/auth/registerAuthor";
 import { authApi } from "@/lib/api/auth";
 import { ApiClientError } from "@/lib/api/client";
-import { paymentsApi } from "@/lib/api/payments";
 
 const JournalRegister = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -39,7 +37,6 @@ const JournalRegister = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { login, isAuthenticated } = useAuth();
-  const queryClient = useQueryClient();
   const redirectFeedback = getRedirectFeedback(redirectStatus);
 
   useEffect(() => {
@@ -100,21 +97,14 @@ const JournalRegister = () => {
 
       toast({
         title: "Account created",
-        description: "Welcome! Complete your submission fee to start submitting manuscripts.",
+        description: "Welcome! You can submit manuscripts right away — APC applies only after acceptance.",
       });
-
-      const paymentSettings = await queryClient
-        .fetchQuery({
-          queryKey: ["payment-settings"],
-          queryFn: () => paymentsApi.getSettings(),
-        })
-        .catch(() => null);
 
       setTimeout(() => {
         void runPostSignInRedirect(
           prefetchRoute,
           navigate,
-          paymentSettings?.enabled ? routes.payment : routes.dashboard,
+          routes.dashboard,
           (status) => {
             setRedirectStatus(status);
           },
@@ -171,15 +161,15 @@ const JournalRegister = () => {
                 </li>
                 <li className="flex gap-2">
                   <span className="text-blue-600 font-bold">2.</span>
-                  Pay the one-time submission fee via bank transfer
+                  Submit your manuscript through the author dashboard
                 </li>
                 <li className="flex gap-2">
                   <span className="text-blue-600 font-bold">3.</span>
-                  Upload payment proof for admin verification
+                  Editorial review and peer review run as usual
                 </li>
                 <li className="flex gap-2">
                   <span className="text-blue-600 font-bold">4.</span>
-                  Submit your manuscript once payment is approved
+                  APC applies only after editorial acceptance (if enabled)
                 </li>
               </ul>
               <p className="text-sm text-gray-500 pt-4 border-t border-gray-200">

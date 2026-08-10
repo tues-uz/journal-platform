@@ -55,7 +55,7 @@ import { MANUSCRIPT_UPLOAD_ACCEPT, MANUSCRIPT_UPLOAD_HINT, inferPublicationForma
 import { cn } from "@/lib/utils";
 import { workflowApi, type DecisionSlug } from "@/lib/api/workflow";
 import { paymentsApi } from "@/lib/api/payments";
-import { canBeginLayoutProduction } from "@/lib/payment/access";
+import { canBeginLayoutProduction, isApcRequired } from "@/lib/payment/access";
 import { usersApi } from "@/lib/api/users";
 import { volumesApi } from "@/lib/api/volumes";
 import { issuesApi } from "@/lib/api/issues";
@@ -286,6 +286,11 @@ function HeEditorialDecisionPanel({
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: paymentSettings } = useQuery({
+    queryKey: ["payment-settings"],
+    queryFn: () => paymentsApi.getSettings(),
+  });
+  const apcRequired = isApcRequired(paymentSettings);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [choice, setChoice] = useState<EditorialChoice | "">("");
@@ -365,7 +370,9 @@ function HeEditorialDecisionPanel({
       if (choice === "approve") {
         toast({
           title: "Approved for publication",
-          description: "The author has been asked to submit payment.",
+          description: apcRequired
+            ? "The author has been asked to submit payment."
+            : "The author has been notified. You can begin layout when ready.",
         });
       } else {
         toast({ title: "Decision submitted" });
@@ -582,7 +589,9 @@ function HeEditorialDecisionPanel({
           <AlertDialogHeader>
             <AlertDialogTitle>Approve for publication</AlertDialogTitle>
             <AlertDialogDescription>
-              The author will be notified to pay the publication fee before layout begins.
+              {apcRequired
+                ? "The author will be notified to pay the publication fee before layout begins."
+                : "The author will be notified. You can begin layout and production next."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -595,7 +604,7 @@ function HeEditorialDecisionPanel({
                 mutation.mutate();
               }}
             >
-              {mutation.isPending ? "Submitting…" : "Approve & request payment"}
+              {mutation.isPending ? "Submitting…" : apcRequired ? "Approve & request payment" : "Approve for publication"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1199,11 +1208,12 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     queryKey: ["payment-settings"],
     queryFn: () => paymentsApi.getSettings(),
   });
-  const paymentEnabled = paymentSettings?.enabled ?? true;
+  const apcRequired = isApcRequired(paymentSettings);
+  const apcState = submission.apcPaymentState;
   const showHeLayoutPanel =
     isMyLayoutAssignment &&
     can("layout_production", "decide") &&
-    canBeginLayoutProduction(submission, paymentEnabled);
+    canBeginLayoutProduction(submission, paymentSettings);
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["submission", submission.id] });
@@ -1637,7 +1647,13 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
   }
 
   // ── Author: Payment after acceptance ──
-  if (isAuthor && submission.status === "payment_pending") {
+  if (
+    isAuthor &&
+    apcRequired &&
+    submission.status === "payment_pending" &&
+    apcState !== "pending_review" &&
+    apcState !== "paid"
+  ) {
     panels.push(
       <div
         key="accept-payment"
@@ -1656,17 +1672,50 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     );
   }
 
+  if (isAuthor && apcRequired && submission.status === "payment_pending" && apcState === "pending_review") {
+    panels.push(
+      <div
+        key="accept-payment-review"
+        className="mb-4 rounded-lg border border-border/80 bg-card px-4 py-4"
+      >
+        <p className="text-sm font-medium text-foreground">Payment proof under review</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Your transfer proof was submitted. An admin will verify it before layout can begin.
+        </p>
+      </div>,
+    );
+  }
+
   // ── Handling Editor: Awaiting author APC ──
   if (
     isMyAssignment &&
     isHandlingEditorRole &&
-    submission.status === "payment_pending"
+    apcRequired &&
+    submission.status === "payment_pending" &&
+    apcState === "due"
   ) {
     panels.push(
       <ActionPanel key="he-await-payment" title="Awaiting author payment">
         <p className="w-full text-sm text-gray-600">
           The author must pay the publication fee (APC) and have it verified by admin before
           layout can begin.
+        </p>
+      </ActionPanel>,
+    );
+  }
+
+  if (
+    isMyAssignment &&
+    isHandlingEditorRole &&
+    apcRequired &&
+    submission.status === "payment_pending" &&
+    apcState === "pending_review"
+  ) {
+    panels.push(
+      <ActionPanel key="he-await-payment-review" title="Payment proof under review">
+        <p className="w-full text-sm text-gray-600">
+          The author submitted APC proof. A publisher admin must verify the payment before layout
+          can begin.
         </p>
       </ActionPanel>,
     );

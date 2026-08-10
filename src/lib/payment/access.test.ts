@@ -1,10 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   canBeginLayoutProduction,
+  getSubmissionApcState,
   hasApprovedPayment,
+  isApcRequired,
   isPureAuthor,
 } from "@/lib/payment/access";
 import type { PaymentRequest } from "@/lib/store/types";
+
+vi.mock("@/lib/demo/mode", () => ({
+  isDemoMode: vi.fn(() => false),
+}));
 
 const approvedPayment: PaymentRequest = {
   id: "pay-1",
@@ -50,35 +56,84 @@ describe("hasApprovedPayment", () => {
   });
 });
 
+describe("isApcRequired", () => {
+  it("is false in demo mode even when payments are enabled", async () => {
+    const { isDemoMode } = await import("@/lib/demo/mode");
+    vi.mocked(isDemoMode).mockReturnValueOnce(true);
+    expect(isApcRequired({ enabled: true })).toBe(false);
+  });
+
+  it("follows payment settings outside demo mode", async () => {
+    const { isDemoMode } = await import("@/lib/demo/mode");
+    vi.mocked(isDemoMode).mockReturnValue(false);
+    expect(isApcRequired({ enabled: true })).toBe(true);
+    expect(isApcRequired({ enabled: false })).toBe(false);
+  });
+});
+
+describe("getSubmissionApcState", () => {
+  const submission = {
+    status: "payment_pending" as const,
+    acceptancePaymentVerified: false,
+    authorId: "author-1",
+  };
+
+  it("returns paid when acceptance is verified on the submission", () => {
+    expect(
+      getSubmissionApcState(
+        { ...submission, acceptancePaymentVerified: true },
+        [],
+      ),
+    ).toBe("paid");
+  });
+
+  it("returns pending_review when author proof awaits admin review", () => {
+    expect(
+      getSubmissionApcState(submission, [
+        { ...approvedPayment, status: "pending_review", authorId: "author-1" },
+      ]),
+    ).toBe("pending_review");
+  });
+
+  it("returns paid when author has approved payment but submission is stale", () => {
+    expect(getSubmissionApcState(submission, [approvedPayment])).toBe("paid");
+  });
+
+  it("returns due when no payment proof exists", () => {
+    expect(getSubmissionApcState(submission, [])).toBe("due");
+  });
+});
+
 describe("canBeginLayoutProduction", () => {
-  it("requires verified production status when payments are enabled", () => {
+  it("requires verified production status when APC is required", () => {
+    const settings = { enabled: true as const };
     expect(
       canBeginLayoutProduction(
         { status: "production", acceptancePaymentVerified: true, proofReady: false },
-        true,
+        settings,
       ),
     ).toBe(true);
 
     expect(
       canBeginLayoutProduction(
         { status: "payment_pending", acceptancePaymentVerified: false, proofReady: false },
-        true,
+        settings,
       ),
     ).toBe(false);
 
     expect(
       canBeginLayoutProduction(
         { status: "production", acceptancePaymentVerified: false, proofReady: false },
-        true,
+        settings,
       ),
     ).toBe(false);
   });
 
-  it("allows accepted manuscripts when payments are disabled", () => {
+  it("allows accepted manuscripts when APC is not required", () => {
     expect(
       canBeginLayoutProduction(
         { status: "accepted", acceptancePaymentVerified: false, proofReady: false },
-        false,
+        { enabled: false },
       ),
     ).toBe(true);
   });

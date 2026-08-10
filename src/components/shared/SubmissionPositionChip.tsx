@@ -7,7 +7,10 @@ import { getSubmissionAssignee, shouldRevealParticipantName, WORKFLOW_STAGE_LABE
 import { cn } from "@/lib/utils";
 
 interface SubmissionPositionChipProps {
-  submission: Pick<Submission, "status" | "authorId" | "handlingEditorId" | "reviewerId">;
+  submission: Pick<
+    Submission,
+    "status" | "authorId" | "handlingEditorId" | "reviewerId" | "apcPaymentState"
+  >;
   getUserById: (id: string) => { name: string; roles: Role[] } | undefined;
   showLabel?: boolean;
   className?: string;

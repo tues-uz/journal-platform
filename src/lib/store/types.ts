@@ -155,6 +155,8 @@ export interface Submission {
   revisionRound?: number;
   scheduledAt?: string;
   acceptancePaymentVerified?: boolean;
+  /** Computed when mapping from API — not persisted in the store. */
+  apcPaymentState?: "none" | "due" | "pending_review" | "paid" | "rejected";
   proofReady?: boolean;
   proofApproved?: boolean;
   reviewSubmitted?: boolean;
