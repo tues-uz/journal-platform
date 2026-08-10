@@ -1,6 +1,7 @@
 import type { Role } from "@/lib/rbac/types";
 import type { Submission, SubmissionStatus } from "@/lib/store/types";
 import { getHandlingEditorIds, hasHandlingEditors, isHandlingEditorOnSubmission } from "@/lib/workflow/handlingEditors";
+import { allRequiredReviewsComplete } from "@/lib/workflow/reviewers";
 
 export const STATUS_OWNER_ROLES: Record<SubmissionStatus, Role[]> = {
   draft: ["author"],
@@ -25,13 +26,26 @@ export function getStatusOwnerRoles(status: SubmissionStatus): Role[] {
 
 /** True when the handling editor can act after peer reviews are complete. */
 export function isReadyForFinalEditorialDecision(
-  submission: Pick<Submission, "status" | "reviewSubmitted" | "editorRecommendation" | "reviewers" | "reviewerId">,
+  submission: Pick<
+    Submission,
+    | "status"
+    | "reviewSubmitted"
+    | "editorRecommendation"
+    | "reviewers"
+    | "reviewerId"
+    | "pendingReviewerId"
+    | "reviewerInvitationStatus"
+  >,
 ): boolean {
   if (submission.status !== "under_review") return false;
-  const reviewsDone =
-    submission.reviewSubmitted === true ||
-    (submission.reviewers?.filter((r) => r.invitationStatus === "accepted" && r.reviewSubmitted).length ?? 0) >= 2;
-  return reviewsDone || !!submission.editorRecommendation;
+  return allRequiredReviewsComplete(submission) || !!submission.editorRecommendation;
+}
+
+/** True when the author submitted a revision and the handling editor should decide next. */
+export function hasAuthorRevisionAwaitingHeReview(
+  submission: Pick<Submission, "status" | "revisionRound">,
+): boolean {
+  return submission.status === "assigned" && (submission.revisionRound ?? 0) > 0;
 }
 
 export function shouldRevealParticipantName(roles: Role[]): boolean {

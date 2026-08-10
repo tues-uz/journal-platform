@@ -2,7 +2,7 @@ import { canAnyRole } from "@/lib/rbac/can";
 import type { Role } from "@/lib/rbac/types";
 import type { Submission, SubmissionStatus } from "@/lib/store/types";
 import type { DecisionSlug } from "@/lib/workflow/submissionActions";
-import { isReadyForFinalEditorialDecision } from "@/lib/workflow/submissionActions";
+import { isReadyForFinalEditorialDecision, hasAuthorRevisionAwaitingHeReview } from "@/lib/workflow/submissionActions";
 import {
   getHandlingEditorIds,
   hasHandlingEditors,
@@ -171,8 +171,7 @@ export function canPerformDecision(
   if (HE_DECISIONS.includes(decision)) {
     const reviewsComplete =
       submission.status === "under_review" && isReadyForFinalEditorialDecision(submission);
-    const revisionReview =
-      submission.status === "assigned" && (submission.revisionRound ?? 0) > 0;
+    const revisionReview = hasAuthorRevisionAwaitingHeReview(submission);
     return (
       (reviewsComplete || revisionReview) &&
       canAnyRole(roles, "editorial_decision", "decide", scope)
@@ -180,7 +179,7 @@ export function canPerformDecision(
   }
 
   if (HE_REVISION_DECISIONS.includes(decision)) {
-    if (submission.status === "assigned" && (submission.revisionRound ?? 0) > 0) {
+    if (hasAuthorRevisionAwaitingHeReview(submission)) {
       return canAnyRole(roles, "editorial_decision", "decide", scope);
     }
     return false;

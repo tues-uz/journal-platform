@@ -109,6 +109,7 @@ export function submissionToDto(submission: Submission): SubmissionDto {
     editorRecommendation: upper(submission.editorRecommendation),
     editorRecommendationNotes: submission.editorRecommendationNotes ?? null,
     editorRecommendationAt: submission.editorRecommendationAt ?? null,
+    revisionRound: submission.revisionRound ?? null,
     copyeditorId: submission.copyeditorId ? toNumericUserId(submission.copyeditorId) : null,
     copyeditorName: copyeditor?.name ?? null,
     copyeditedAt: submission.copyeditedAt ?? null,

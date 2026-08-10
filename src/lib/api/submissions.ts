@@ -67,6 +67,7 @@ export interface SubmissionDto {
   editorRecommendation: string | null;
   editorRecommendationNotes: string | null;
   editorRecommendationAt: string | null;
+  revisionRound: number | null;
   copyeditorId: number | null;
   copyeditorName: string | null;
   copyeditedAt: string | null;
@@ -184,6 +185,7 @@ export function mapSubmissionDto(dto: SubmissionDto): Submission {
     editorRecommendation: lower(dto.editorRecommendation),
     editorRecommendationNotes: dto.editorRecommendationNotes ?? undefined,
     editorRecommendationAt: dto.editorRecommendationAt ?? undefined,
+    revisionRound: dto.revisionRound ?? undefined,
     copyeditorId: dto.copyeditorId != null ? String(dto.copyeditorId) : undefined,
     copyeditorName: dto.copyeditorName ?? undefined,
     copyeditedAt: dto.copyeditedAt ?? undefined,

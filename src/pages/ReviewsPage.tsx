@@ -9,13 +9,34 @@ import { useAuth } from "@/features/auth/useAuth";
 import { submissionsApi } from "@/lib/api/submissions";
 import { buildUserDirectory } from "@/lib/api/userDirectory";
 import { filterSubmissionsForReviews } from "@/lib/store/submissionFilters";
-import { getReviewerSlot } from "@/lib/workflow/reviewers";
+import { isHandlingEditorOnSubmission } from "@/lib/workflow/handlingEditors";
+import { isReadyForFinalEditorialDecision, hasAuthorRevisionAwaitingHeReview } from "@/lib/workflow/submissionActions";
+import { countSubmittedReviews, getReviewerSlot } from "@/lib/workflow/reviewers";
+import { MIN_REVIEWERS } from "@/lib/store/types";
 import { routes } from "@/app/routes";
 import { cn } from "@/lib/utils";
 import type { Submission } from "@/lib/store/types";
 
-type ReviewFilter = "all" | "invitation" | "active" | "done";
+type ReviewFilter = "all" | "invitation" | "active" | "done" | "decide" | "awaiting";
 type ReviewTaskState = "invitation" | "active" | "done";
+type HandlingEditorMonitorState = "decide" | "await_reviews" | "revision_review";
+
+function getHandlingEditorMonitorState(
+  submission: Submission,
+  userId: string,
+): HandlingEditorMonitorState | null {
+  if (!isHandlingEditorOnSubmission(submission, userId)) return null;
+
+  if (hasAuthorRevisionAwaitingHeReview(submission)) {
+    return "revision_review";
+  }
+
+  if (submission.status === "under_review") {
+    return isReadyForFinalEditorialDecision(submission) ? "decide" : "await_reviews";
+  }
+
+  return null;
+}
 
 function getReviewerTaskState(submission: Submission, userId: string): ReviewTaskState | null {
   const slot = getReviewerSlot(submission, userId);
@@ -26,11 +47,21 @@ function getReviewerTaskState(submission: Submission, userId: string): ReviewTas
   return null;
 }
 
-const STATUS_LABEL: Record<ReviewTaskState, string> = {
+const REVIEWER_STATUS_LABEL: Record<ReviewTaskState, string> = {
   invitation: "Respond",
   active: "Review",
   done: "Submitted",
 };
+
+const HE_MONITOR_STATUS_LABEL: Record<HandlingEditorMonitorState, string> = {
+  decide: "Decide",
+  await_reviews: "Awaiting reviews",
+  revision_review: "Review revision",
+};
+
+function isHandlingEditorView(roles: string[]) {
+  return roles.includes("handling_editor");
+}
 
 function formatUpdatedAt(value: string) {
   return new Date(value).toLocaleDateString(undefined, {
@@ -54,20 +85,32 @@ export default function ReviewsPage() {
 
   const getUserById = useMemo(() => buildUserDirectory(submissions), [submissions]);
 
+  const isEditorMonitor = !!user && isHandlingEditorView(user.roles);
+
   const reviews = useMemo(() => {
     if (!user) return [];
     return filterSubmissionsForReviews(submissions, user.id, user.roles);
   }, [submissions, user]);
 
   const taskCounts = useMemo(() => {
-    if (!user) return { all: 0, invitation: 0, active: 0, done: 0 };
-    const counts = { all: reviews.length, invitation: 0, active: 0, done: 0 };
+    if (!user) return { all: 0, invitation: 0, active: 0, done: 0, decide: 0, awaiting: 0 };
+    const counts = { all: reviews.length, invitation: 0, active: 0, done: 0, decide: 0, awaiting: 0 };
+
     for (const submission of reviews) {
+      if (isEditorMonitor) {
+        const state = getHandlingEditorMonitorState(submission, user.id);
+        if (state === "decide") counts.decide += 1;
+        if (state === "await_reviews") counts.awaiting += 1;
+        if (state === "revision_review") counts.decide += 1;
+        continue;
+      }
+
       const state = getReviewerTaskState(submission, user.id);
       if (state) counts[state] += 1;
     }
+
     return counts;
-  }, [reviews, user]);
+  }, [reviews, user, isEditorMonitor]);
 
   const filtered = useMemo(() => {
     if (!user) return [];
@@ -84,9 +127,36 @@ export default function ReviewsPage() {
     }
 
     if (taskFilter !== "all") {
-      list = list.filter(
-        (submission) => getReviewerTaskState(submission, user.id) === taskFilter,
-      );
+      list = list.filter((submission) => {
+        if (isEditorMonitor) {
+          const state = getHandlingEditorMonitorState(submission, user.id);
+          if (taskFilter === "decide") {
+            return state === "decide" || state === "revision_review";
+          }
+          if (taskFilter === "awaiting") {
+            return state === "await_reviews";
+          }
+          return false;
+        }
+        return getReviewerTaskState(submission, user.id) === taskFilter;
+      });
+    }
+
+    if (isEditorMonitor) {
+      const priority: Record<HandlingEditorMonitorState, number> = {
+        decide: 0,
+        revision_review: 1,
+        await_reviews: 2,
+      };
+
+      return list.sort((a, b) => {
+        const stateA = getHandlingEditorMonitorState(a, user.id);
+        const stateB = getHandlingEditorMonitorState(b, user.id);
+        const rankA = stateA ? priority[stateA] : 9;
+        const rankB = stateB ? priority[stateB] : 9;
+        if (rankA !== rankB) return rankA - rankB;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
     }
 
     const priority: Record<ReviewTaskState, number> = {
@@ -103,14 +173,20 @@ export default function ReviewsPage() {
       if (rankA !== rankB) return rankA - rankB;
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
-  }, [reviews, search, taskFilter, user]);
+  }, [reviews, search, taskFilter, user, isEditorMonitor]);
 
-  const filters: Array<{ value: ReviewFilter; label: string }> = [
-    { value: "all", label: "All" },
-    { value: "invitation", label: "Invitations" },
-    { value: "active", label: "In progress" },
-    { value: "done", label: "Submitted" },
-  ];
+  const filters: Array<{ value: ReviewFilter; label: string }> = isEditorMonitor
+    ? [
+        { value: "all", label: "All" },
+        { value: "decide", label: "Ready to decide" },
+        { value: "awaiting", label: "Awaiting reviews" },
+      ]
+    : [
+        { value: "all", label: "All" },
+        { value: "invitation", label: "Invitations" },
+        { value: "active", label: "In progress" },
+        { value: "done", label: "Submitted" },
+      ];
 
   return (
     <AuthenticatedLayout
@@ -122,8 +198,13 @@ export default function ReviewsPage() {
             Reviews
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {reviews.length} assigned
-            {taskCounts.invitation > 0 ? ` · ${taskCounts.invitation} awaiting response` : null}
+            {isEditorMonitor
+              ? `${reviews.length} in peer review${
+                  taskCounts.decide > 0 ? ` · ${taskCounts.decide} ready for your decision` : ""
+                }`
+              : `${reviews.length} assigned${
+                  taskCounts.invitation > 0 ? ` · ${taskCounts.invitation} awaiting response` : ""
+                }`}
           </p>
         </header>
 
@@ -183,10 +264,23 @@ export default function ReviewsPage() {
             <ul className="divide-y divide-border/60">
               {filtered.map((submission) => {
                 if (!user) return null;
-                const taskState = getReviewerTaskState(submission, user.id);
-                if (!taskState) return null;
+
+                const editorState = isEditorMonitor
+                  ? getHandlingEditorMonitorState(submission, user.id)
+                  : null;
+                const reviewerState = !isEditorMonitor
+                  ? getReviewerTaskState(submission, user.id)
+                  : null;
+
+                if (!editorState && !reviewerState) return null;
 
                 const author = getUserById(submission.authorId);
+                const statusLabel = editorState
+                  ? HE_MONITOR_STATUS_LABEL[editorState]
+                  : REVIEWER_STATUS_LABEL[reviewerState!];
+                const highlight = editorState
+                  ? editorState === "decide" || editorState === "revision_review"
+                  : reviewerState === "invitation";
 
                 return (
                   <li key={submission.id}>
@@ -204,6 +298,12 @@ export default function ReviewsPage() {
                           {author?.name ?? submission.authorName ?? "Author"}
                           <span className="mx-1.5 text-border/80">·</span>
                           {formatUpdatedAt(submission.updatedAt)}
+                          {editorState === "await_reviews" ? (
+                            <>
+                              <span className="mx-1.5 text-border/80">·</span>
+                              {countSubmittedReviews(submission)}/{MIN_REVIEWERS} reviews in
+                            </>
+                          ) : null}
                         </p>
                       </div>
 
@@ -211,12 +311,12 @@ export default function ReviewsPage() {
                         <span
                           className={cn(
                             "text-xs",
-                            taskState === "invitation"
+                            highlight
                               ? "font-medium text-foreground"
                               : "text-muted-foreground",
                           )}
                         >
-                          {STATUS_LABEL[taskState]}
+                          {statusLabel}
                         </span>
                         <ChevronRight
                           className="h-4 w-4 text-muted-foreground/30 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground/60"

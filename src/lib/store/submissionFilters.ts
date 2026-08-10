@@ -2,7 +2,7 @@ import type { Role } from "@/lib/rbac/types";
 import type { ScopeContext } from "@/lib/rbac/types";
 import type { Submission, SubmissionStatus } from "@/lib/store/types";
 import { isHandlingEditorOnSubmission } from "@/lib/workflow/handlingEditors";
-import { isReadyForFinalEditorialDecision } from "@/lib/workflow/submissionActions";
+import { isReadyForFinalEditorialDecision, hasAuthorRevisionAwaitingHeReview } from "@/lib/workflow/submissionActions";
 import { getReviewerSlot, isReviewerOnSubmission } from "@/lib/workflow/reviewers";
 import { deriveLayoutPhase } from "@/lib/workflow/layoutPhase";
 
@@ -95,7 +95,11 @@ export function filterSubmissionsForEditorial(
     return submissions.filter(
       (s) =>
         isHandlingEditorOnSubmission(s, userId) &&
-        (s.status === "assigned" || s.status === "under_review" || s.status === "revision_required"),
+        (s.status === "assigned" ||
+          s.status === "under_review" ||
+          s.status === "revision_required" ||
+          hasAuthorRevisionAwaitingHeReview(s) ||
+          isReadyForFinalEditorialDecision(s)),
     );
   }
 

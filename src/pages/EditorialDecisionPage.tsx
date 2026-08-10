@@ -8,6 +8,7 @@ import { useAuth } from "@/features/auth/useAuth";
 import { submissionsApi } from "@/lib/api/submissions";
 import { buildUserDirectory } from "@/lib/api/userDirectory";
 import { filterSubmissionsForEditorial } from "@/lib/store/submissionFilters";
+import { isReadyForFinalEditorialDecision, hasAuthorRevisionAwaitingHeReview } from "@/lib/workflow/submissionActions";
 import { routes } from "@/app/routes";
 
 export default function EditorialDecisionPage() {
@@ -43,7 +44,12 @@ export default function EditorialDecisionPage() {
         <SubmissionListTable
           submissions={queue}
           getUserById={getUserById}
-          actionLabel={(sub) => (sub.status === "assigned" ? "Assign Editor" : "Decide")}
+          actionLabel={(sub) => {
+            if (hasAuthorRevisionAwaitingHeReview(sub)) return "Review revision";
+            if (isReadyForFinalEditorialDecision(sub)) return "Decide";
+            if (sub.status === "assigned") return "Open";
+            return "Open";
+          }}
         />
       )}
     </AuthenticatedLayout>

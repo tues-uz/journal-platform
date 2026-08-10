@@ -35,6 +35,7 @@ import {
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import {
+  hasAuthorRevisionAwaitingHeReview,
   isAssignedHandlingEditor,
   isReadyForFinalEditorialDecision,
   WORKFLOW_STAGE_LABELS,
@@ -1168,8 +1169,8 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     canSchedulePublication &&
     submission.status === "production" &&
     submission.files.some((file) => file.type === "publication");
-  const hasAuthorRevisionPending =
-    submission.status === "assigned" && (submission.revisionRound ?? 0) > 0;
+  const hasAuthorRevisionPending = hasAuthorRevisionAwaitingHeReview(submission);
+  const reviewsCompleteForDecision = isReadyForFinalEditorialDecision(submission);
 
   const { data: handlingEditors = [] } = useQuery({
     queryKey: ["users", "candidates", "HANDLING_EDITOR", SEED_VERSION],
@@ -1544,14 +1545,14 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     isHandlingEditorRole &&
     submission.status === "under_review" &&
     can("editorial_decision", "decide") &&
-    isReadyForFinalEditorialDecision(submission);
+    reviewsCompleteForDecision;
 
   if (canHeDecideAfterReview) {
     panels.push(
       <HeEditorialDecisionPanel
         key="he-decision"
         submissionId={submission.id}
-        description="Both reviewer reports are in. Choose the next step for this manuscript."
+        description="Reviewer reports are complete. Choose the next step for this manuscript."
       />,
     );
   }
@@ -1576,7 +1577,7 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     isMyAssignment &&
     isHandlingEditorRole &&
     submission.status === "under_review" &&
-    !isReadyForFinalEditorialDecision(submission)
+    !reviewsCompleteForDecision
   ) {
     panels.push(
       <ActionPanel key="he-await-reviews" title="Handling Editor — Awaiting Reviews">
