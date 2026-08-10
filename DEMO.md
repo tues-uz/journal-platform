@@ -1,8 +1,12 @@
-# Offline Demo Mode
+# Journal Platform — End-to-End Workflow Guide
 
-Demo mode is active when **no** `VITE_API_URL` is set, or when `VITE_DEMO_MODE=true` (used on Vercel demo deploys). Sign in at `/signin` — demo accounts are listed on the page in demo mode.
+This document describes the complete 8-step editorial workflow. In **Staging & Production** (`VITE_API_URL=https://journal.kubeletto.app`), all operations run **live against the Spring Boot REST API and PostgreSQL database**. 
 
-## Dummy accounts
+When `VITE_API_URL` is omitted or `VITE_DEMO_MODE=true`, the platform runs in offline demo mode using the local memory harness.
+
+## Demo & Seed Accounts
+
+All accounts are pre-seeded in the staging database and ready for immediate sign-in at `/signin`:
 
 | Role | Email | Password |
 | --- | --- | --- |
@@ -13,6 +17,7 @@ Demo mode is active when **no** `VITE_API_URL` is set, or when `VITE_DEMO_MODE=t
 | Handling Editor 3 | `editor3@journal.com` | `editor123` |
 | Reviewer | `reviewer@journal.com` | `reviewer123` |
 | Reviewer 2 | `reviewer2@journal.com` | `reviewer123` |
+| Production Editor | `production@journal.com` | `production123` |
 | Author | `author@journal.com` | `author123` |
 | Author (extra) | `author2@journal.com` | `author123` |
 
@@ -20,7 +25,7 @@ Authors submit manuscripts **without paying upfront**. The **APC (publication fe
 
 ---
 
-## Happy path (submit → publish)
+## Live End-to-End Happy Path (Submit → Publish)
 
 No revisions, no rejections. Sign out and sign back in between steps when switching roles.
 
