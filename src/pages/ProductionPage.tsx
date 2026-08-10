@@ -10,10 +10,13 @@ import { LayoutStatusBadge } from "@/components/shared/LayoutStatusBadge";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import { submissionsApi } from "@/lib/api/submissions";
+import { volumesApi } from "@/lib/api/volumes";
+import { issuesApi } from "@/lib/api/issues";
+import { publicSettingsApi } from "@/lib/api/publicSettings";
 import { buildUserDirectory } from "@/lib/api/userDirectory";
-import { useJournalStore } from "@/lib/store/store";
 import { filterSubmissionsForProduction } from "@/lib/store/submissionFilters";
 import { getStatusLabel } from "@/lib/status/config";
+import type { Volume } from "@/lib/store/types";
 import { routes } from "@/app/routes";
 
 export default function ProductionPage() {
@@ -26,8 +29,45 @@ export default function ProductionPage() {
     enabled: !!user,
   });
 
-  const volumes = useJournalStore((s) => s.volumes);
-  const journalSettings = useJournalStore((s) => s.journalSettings);
+  const { data: managedVolumes = [] } = useQuery({
+    queryKey: ["volumes"],
+    queryFn: () => volumesApi.list(),
+    enabled: !!user,
+  });
+
+  const { data: managedIssues = [] } = useQuery({
+    queryKey: ["issues"],
+    queryFn: () => issuesApi.list(),
+    enabled: !!user,
+  });
+
+  const { data: publicSettings } = useQuery({
+    queryKey: ["public-settings"],
+    queryFn: () => publicSettingsApi.get(),
+    enabled: !!user,
+  });
+
+  const volumes: Volume[] = useMemo(() => {
+    return managedVolumes.map((vol) => ({
+      id: vol.id,
+      number: vol.number,
+      year: vol.year,
+      title: vol.title,
+      status: vol.status,
+      issues: managedIssues
+        .filter((issue) => issue.volumeId === vol.id)
+        .map((issue) => ({
+          id: issue.id,
+          volumeId: vol.id,
+          number: issue.number,
+          title: issue.title,
+          status: issue.status,
+          articleIds: [],
+        })),
+    }));
+  }, [managedVolumes, managedIssues]);
+
+  const journalShortName = publicSettings?.shortName ?? "SJMS";
   const getUserById = useMemo(() => buildUserDirectory(submissions), [submissions]);
 
   const isHandlingEditor =
@@ -85,7 +125,7 @@ export default function ProductionPage() {
       ) : isHandlingEditor ? (
         <LayoutAssignedArticlesTable
           submissions={pipeline}
-          journalShortName={journalSettings.shortName}
+          journalShortName={journalShortName}
           volumes={volumes}
         />
       ) : (

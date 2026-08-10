@@ -253,7 +253,7 @@ const SubmissionDetailPage = () => {
   const { data: activities = [], isLoading: activitiesLoading } = useQuery({
     queryKey: ["submission-activities", id],
     queryFn: () => activitiesApi.list(id as string),
-    enabled: !!id && !!user && isDemoMode(),
+    enabled: !!id && !!user,
   });
 
   const getUserById = useMemo(
@@ -451,22 +451,16 @@ const SubmissionDetailPage = () => {
           <TabsContent value="timeline" className="mt-0">
             <DetailSection title="Timeline">
               <div className="px-4 py-4">
-                {isDemoMode() ? (
-                  activitiesLoading ? (
-                    <p className="text-sm text-muted-foreground">Loading activity history…</p>
-                  ) : (
-                    <Timeline
-                      entries={activities}
-                      currentStatus={submission.status}
-                      submission={submission}
-                      getUserById={getUserById}
-                      showStatusBanner={false}
-                    />
-                  )
+                {activitiesLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading activity history…</p>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Activity history is not available in this environment yet.
-                  </p>
+                  <Timeline
+                    entries={activities}
+                    currentStatus={submission.status}
+                    submission={submission}
+                    getUserById={getUserById}
+                    showStatusBanner={false}
+                  />
                 )}
               </div>
             </DetailSection>

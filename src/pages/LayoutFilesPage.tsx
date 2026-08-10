@@ -6,8 +6,11 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { LayoutAssignedArticlesTable } from "@/components/layout-editor/LayoutAssignedArticlesTable";
 import { useAuth } from "@/features/auth/useAuth";
 import { submissionsApi } from "@/lib/api/submissions";
-import { useJournalStore } from "@/lib/store/store";
+import { volumesApi } from "@/lib/api/volumes";
+import { issuesApi } from "@/lib/api/issues";
+import { publicSettingsApi } from "@/lib/api/publicSettings";
 import { filterLayoutProductionFiles } from "@/lib/store/submissionFilters";
+import type { Volume } from "@/lib/store/types";
 import { routes } from "@/app/routes";
 
 export default function LayoutFilesPage() {
@@ -19,10 +22,45 @@ export default function LayoutFilesPage() {
     enabled: !!user,
   });
 
-  // Volumes/issues aren't wired to the real publication API yet, so this
-  // display-only lookup still reads the mock store.
-  const volumes = useJournalStore((s) => s.volumes);
-  const journalSettings = useJournalStore((s) => s.journalSettings);
+  const { data: managedVolumes = [] } = useQuery({
+    queryKey: ["volumes"],
+    queryFn: () => volumesApi.list(),
+    enabled: !!user,
+  });
+
+  const { data: managedIssues = [] } = useQuery({
+    queryKey: ["issues"],
+    queryFn: () => issuesApi.list(),
+    enabled: !!user,
+  });
+
+  const { data: publicSettings } = useQuery({
+    queryKey: ["public-settings"],
+    queryFn: () => publicSettingsApi.get(),
+    enabled: !!user,
+  });
+
+  const volumes: Volume[] = useMemo(() => {
+    return managedVolumes.map((vol) => ({
+      id: vol.id,
+      number: vol.number,
+      year: vol.year,
+      title: vol.title,
+      status: vol.status,
+      issues: managedIssues
+        .filter((issue) => issue.volumeId === vol.id)
+        .map((issue) => ({
+          id: issue.id,
+          volumeId: vol.id,
+          number: issue.number,
+          title: issue.title,
+          status: issue.status,
+          articleIds: [],
+        })),
+    }));
+  }, [managedVolumes, managedIssues]);
+
+  const journalShortName = publicSettings?.shortName ?? "SJMS";
 
   const completed = useMemo(() => {
     if (!user) return [];
@@ -48,7 +86,7 @@ export default function LayoutFilesPage() {
       ) : (
         <LayoutAssignedArticlesTable
           submissions={completed}
-          journalShortName={journalSettings.shortName}
+          journalShortName={journalShortName}
           volumes={volumes}
         />
       )}

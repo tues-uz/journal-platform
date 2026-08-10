@@ -1,19 +1,19 @@
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Download, Eye, FileText, Replace } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUpload, type UploadedFileMeta } from "@/components/shared/FileUpload";
 import { PdfViewer } from "@/components/shared/PdfViewer";
 import {
-  buildPublicationFilesFromUpload,
-  downloadSubmissionFile,
   getLatestCopyeditFile,
   getPublicationFiles,
   PUBLICATION_UPLOAD_ACCEPT,
   PUBLICATION_UPLOAD_HINT,
 } from "@/lib/files/submissionFiles";
 import type { PublicationFileFormat, Submission, SubmissionFile } from "@/lib/store/types";
-import { useJournalStore } from "@/lib/store/store";
+import { uploadSubmissionFiles, getFileDownloadUrl } from "@/lib/api/files";
+import { ApiClientError } from "@/lib/api/client";
 import { useToast } from "@/hooks/use-toast";
 
 const FORMAT_LABELS: Record<PublicationFileFormat, string> = {
@@ -39,6 +39,15 @@ function formatDate(iso: string) {
   });
 }
 
+function inferFormat(filename: string): PublicationFileFormat {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".pdf")) return "pdf";
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html";
+  if (lower.endsWith(".xml")) return "xml";
+  if (lower.endsWith(".epub")) return "epub";
+  return "supplementary";
+}
+
 interface PublicationFilesPanelProps {
   submission: Submission;
   readOnly?: boolean;
@@ -50,15 +59,13 @@ interface PublicationFilesPanelProps {
 export function PublicationFilesPanel({
   submission,
   readOnly = false,
-  actorId,
-  actorName,
   getUserById,
 }: PublicationFilesPanelProps) {
   const { toast } = useToast();
-  const uploadPublicationFiles = useJournalStore((s) => s.uploadPublicationFiles);
+  const queryClient = useQueryClient();
   const [uploadFiles, setUploadFiles] = useState<UploadedFileMeta[]>([]);
   const [replaceFormat, setReplaceFormat] = useState<PublicationFileFormat | null>(null);
-  const [previewFile, setPreviewFile] = useState<SubmissionFile | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<{ url: string; name: string } | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const copyeditFile = getLatestCopyeditFile(submission.files);
@@ -67,7 +74,7 @@ export function PublicationFilesPanel({
   const groupedByFormat = useMemo(() => {
     const groups = new Map<PublicationFileFormat, SubmissionFile[]>();
     for (const file of publicationFiles) {
-      const format = file.format ?? "other";
+      const format = file.format ?? inferFormat(file.name);
       const existing = groups.get(format) ?? [];
       existing.push(file);
       groups.set(format, existing);
@@ -79,23 +86,45 @@ export function PublicationFilesPanel({
   }, [publicationFiles]);
 
   const handleUpload = async () => {
-    if (uploadFiles.length === 0) return;
+    const rawFiles = uploadFiles.map((f) => f.file).filter((f): f is File => !!f);
+    if (rawFiles.length === 0) return;
     setUploading(true);
     try {
-      const built = await buildPublicationFilesFromUpload(
-        uploadFiles,
-        submission.files,
-        actorId,
-        `pub-${submission.id}`,
-      );
-      uploadPublicationFiles(submission.id, built, actorId, actorName);
+      for (const file of rawFiles) {
+        const format = replaceFormat ?? inferFormat(file.name);
+        const backendFormat = format.toUpperCase() as "PDF" | "HTML" | "XML" | "EPUB" | "SUPPLEMENTARY" | "OTHER";
+        await uploadSubmissionFiles(submission.id, [file], "PUBLICATION", {
+          format: backendFormat,
+        });
+      }
+      void queryClient.invalidateQueries({ queryKey: ["submission", submission.id] });
+      void queryClient.invalidateQueries({ queryKey: ["submissions"] });
       setUploadFiles([]);
       setReplaceFormat(null);
       toast({ title: "Publication files uploaded" });
-    } catch {
-      toast({ title: "Upload failed", variant: "destructive" });
+    } catch (err) {
+      const msg = err instanceof ApiClientError ? err.message : "Upload failed.";
+      toast({ title: "Upload failed", description: msg, variant: "destructive" });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDownload = async (fileId: string, filename: string) => {
+    try {
+      const url = await getFileDownloadUrl(submission.id, fileId);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      toast({ title: "Download unavailable", variant: "destructive" });
+    }
+  };
+
+  const handlePreview = async (file: SubmissionFile) => {
+    try {
+      const url = await getFileDownloadUrl(submission.id, file.id);
+      setPreviewUrl({ url, name: file.name });
+    } catch {
+      toast({ title: "Preview unavailable", variant: "destructive" });
     }
   };
 
@@ -114,12 +143,12 @@ export function PublicationFilesPanel({
                 <span className="text-gray-500">{formatFileSize(copyeditFile.size)}</span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {copyeditFile.dataUrl?.startsWith("data:application/pdf") && (
+                {copyeditFile.name.toLowerCase().endsWith(".pdf") && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="rounded-xl"
-                    onClick={() => setPreviewFile(copyeditFile)}
+                    onClick={() => handlePreview(copyeditFile)}
                   >
                     <Eye className="h-4 w-4 mr-1.5" />
                     Preview
@@ -129,11 +158,7 @@ export function PublicationFilesPanel({
                   variant="outline"
                   size="sm"
                   className="rounded-xl"
-                  onClick={() => {
-                    if (!downloadSubmissionFile(copyeditFile)) {
-                      toast({ title: "Download unavailable", variant: "destructive" });
-                    }
-                  }}
+                  onClick={() => handleDownload(copyeditFile.id, copyeditFile.name)}
                 >
                   <Download className="h-4 w-4 mr-1.5" />
                   Download
@@ -175,12 +200,12 @@ export function PublicationFilesPanel({
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {file.dataUrl?.startsWith("data:application/pdf") && (
+                        {file.name.toLowerCase().endsWith(".pdf") && (
                           <Button
                             variant="outline"
                             size="sm"
                             className="rounded-xl"
-                            onClick={() => setPreviewFile(file)}
+                            onClick={() => handlePreview(file)}
                           >
                             <Eye className="h-4 w-4 mr-1.5" />
                             Preview
@@ -190,7 +215,7 @@ export function PublicationFilesPanel({
                           variant="outline"
                           size="sm"
                           className="rounded-xl"
-                          onClick={() => downloadSubmissionFile(file)}
+                          onClick={() => handleDownload(file.id, file.name)}
                         >
                           <Download className="h-4 w-4 mr-1.5" />
                           Download
@@ -245,15 +270,15 @@ export function PublicationFilesPanel({
         </CardContent>
       </Card>
 
-      {previewFile?.dataUrl && (
+      {previewUrl && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-gray-700">Preview: {previewFile.name}</p>
-            <Button variant="ghost" size="sm" onClick={() => setPreviewFile(null)}>
+            <p className="text-sm font-medium text-gray-700">Preview: {previewUrl.name}</p>
+            <Button variant="ghost" size="sm" onClick={() => setPreviewUrl(null)}>
               Close
             </Button>
           </div>
-          <PdfViewer url={previewFile.dataUrl} fileName={previewFile.name} />
+          <PdfViewer url={previewUrl.url} fileName={previewUrl.name} />
         </div>
       )}
     </div>

@@ -16,9 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissions } from "@/lib/rbac/usePermissions";
 import { paymentsApi } from "@/lib/api/payments";
+import { settingsApi } from "@/lib/api/settings";
 import { ApiClientError } from "@/lib/api/client";
-import { useJournalStore } from "@/lib/store/store";
-import { ROLE_LABELS } from "@/lib/rbac/types";
 import { routes } from "@/app/routes";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,11 +27,14 @@ export default function SettingsPage() {
   const { can } = usePermissions();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const settings = useJournalStore((s) => s.journalSettings);
-  const getUserById = useJournalStore((s) => s.getUserById);
-  const updatedBy = getUserById(settings.updatedBy);
 
   const canEditPayment = can("author_payment", "edit");
+
+  const { data: journalSettings } = useQuery({
+    queryKey: ["journal-settings"],
+    queryFn: () => settingsApi.getJournalSettings(),
+    enabled: !!user,
+  });
 
   const { data: paymentSettings } = useQuery({
     queryKey: ["payment-settings"],
@@ -96,19 +98,21 @@ export default function SettingsPage() {
   };
 
   const rows = [
-    { label: t("settings.journalFields.journalName"), value: settings.journalName },
-    { label: t("settings.journalFields.shortName"), value: settings.shortName },
-    { label: t("settings.journalFields.publisher"), value: settings.publisher },
-    { label: t("settings.journalFields.issn"), value: settings.issn },
-    { label: t("settings.journalFields.contactEmail"), value: settings.contactEmail },
+    { label: t("settings.journalFields.journalName"), value: journalSettings?.journalName ?? "—" },
+    { label: t("settings.journalFields.shortName"), value: journalSettings?.shortName ?? "—" },
+    { label: t("settings.journalFields.publisher"), value: journalSettings?.publisher ?? "—" },
+    { label: t("settings.journalFields.issn"), value: journalSettings?.issn ?? "—" },
+    { label: t("settings.journalFields.contactEmail"), value: journalSettings?.contactEmail ?? "—" },
     {
       label: t("settings.journalFields.reviewPolicy"),
-      value: settings.reviewPolicy.replace(/-/g, " "),
+      value: journalSettings?.reviewPolicy?.replace(/-/g, " ") ?? "double blind",
     },
-    { label: t("settings.journalFields.defaultLanguage"), value: settings.defaultLanguage },
+    { label: t("settings.journalFields.defaultLanguage"), value: journalSettings?.defaultLanguage ?? "English" },
     {
       label: t("settings.journalFields.lastUpdated"),
-      value: `${new Date(settings.updatedAt).toLocaleString()}${updatedBy ? ` by ${updatedBy.name}` : ""}`,
+      value: journalSettings?.updatedAt
+        ? new Date(journalSettings.updatedAt).toLocaleString()
+        : "—",
     },
   ];
 
@@ -164,11 +168,11 @@ export default function SettingsPage() {
             <div>
               <CardTitle className="text-lg">{t("settings.journalConfig.title")}</CardTitle>
               <p className="text-sm text-gray-500 mt-1">
-                {t("settings.journalConfig.subtitle", { shortName: settings.shortName })}
+                {t("settings.journalConfig.subtitle", { shortName: journalSettings?.shortName ?? "SJMS" })}
               </p>
             </div>
             <Badge variant="secondary" className="rounded-lg ml-auto">
-              {updatedBy?.roles.map((r) => ROLE_LABELS[r]).join(", ") ?? "Admin"}
+              Configured
             </Badge>
           </div>
         </CardHeader>
@@ -307,7 +311,9 @@ export default function SettingsPage() {
           <CardTitle className="text-lg">{t("settings.guidelines.title")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-700 leading-relaxed">{settings.submissionGuidelines}</p>
+          <p className="text-sm text-gray-700 leading-relaxed">
+            {journalSettings?.submissionGuidelines ?? "Please follow the standard academic manuscript preparation guidelines."}
+          </p>
         </CardContent>
       </Card>
     </AuthenticatedLayout>

@@ -245,9 +245,26 @@ export interface SubmissionCreateInput {
   saveAsDraft: boolean;
 }
 
+export interface SubmissionUpdateInput {
+  title?: string;
+  abstractText?: string;
+  keywords?: string[];
+  language?: string;
+  articleType?: string;
+  submit?: boolean;
+}
+
 export const submissionsApi = {
   async create(input: SubmissionCreateInput): Promise<Submission> {
     const dto = await apiRequest<SubmissionDto>("/api/submissions", { method: "POST", body: input });
+    return mapSubmissionDto(dto);
+  },
+
+  async update(id: string, input: SubmissionUpdateInput): Promise<Submission> {
+    const dto = await apiRequest<SubmissionDto>(`/api/submissions/${id}`, {
+      method: "PUT",
+      body: input,
+    });
     return mapSubmissionDto(dto);
   },
 

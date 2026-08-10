@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,8 @@ import { LayoutStatusBadge } from "@/components/shared/LayoutStatusBadge";
 import { getPublicationFiles } from "@/lib/files/submissionFiles";
 import type { Role } from "@/lib/rbac/types";
 import type { Submission } from "@/lib/store/types";
-import { useJournalStore } from "@/lib/store/store";
+import { workflowApi } from "@/lib/api/workflow";
+import { ApiClientError } from "@/lib/api/client";
 import {
   createDefaultLayoutChecklist,
   deriveLayoutPhase,
@@ -43,10 +45,7 @@ export function LayoutEditorWorkspace({
   readOnly = false,
 }: LayoutEditorWorkspaceProps) {
   const { toast } = useToast();
-  const startLayout = useJournalStore((s) => s.startLayout);
-  const sendForProof = useJournalStore((s) => s.sendForProof);
-  const saveProductionNotes = useJournalStore((s) => s.saveProductionNotes);
-  const updateLayoutChecklist = useJournalStore((s) => s.updateLayoutChecklist);
+  const queryClient = useQueryClient();
 
   const phase = deriveLayoutPhase(submission);
   const publicationFiles = getPublicationFiles(submission.files);
@@ -75,45 +74,56 @@ export function LayoutEditorWorkspace({
   const canStart =
     isClaimedByMe && !readOnly && phase === "waiting" && !submission.layoutStartedAt;
   const canWork = isClaimedByMe && !readOnly && phase === "in_progress";
-  const canSendForProof =
-    canWork && publicationFiles.length > 0;
+  const canSendForProof = canWork && publicationFiles.length > 0;
+
+  const startLayoutMutation = useMutation({
+    mutationFn: () => workflowApi.startLayout(submission.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["submission", submission.id] });
+      void queryClient.invalidateQueries({ queryKey: ["submissions"] });
+      void queryClient.invalidateQueries({ queryKey: ["submission-activities", submission.id] });
+      toast({ title: "Layout editing started" });
+    },
+    onError: (err) => {
+      const msg = err instanceof ApiClientError ? err.message : "Failed to start layout.";
+      toast({ title: "Action failed", description: msg, variant: "destructive" });
+    },
+  });
+
+  const sendForProofMutation = useMutation({
+    mutationFn: () => workflowApi.sendForProof(submission.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["submission", submission.id] });
+      void queryClient.invalidateQueries({ queryKey: ["submissions"] });
+      void queryClient.invalidateQueries({ queryKey: ["submission-activities", submission.id] });
+      toast({ title: "Marked ready for proofreading" });
+    },
+    onError: (err) => {
+      const msg = err instanceof ApiClientError ? err.message : "Failed to send for proofreading.";
+      toast({ title: "Action failed", description: msg, variant: "destructive" });
+    },
+  });
 
   const handleStartLayout = () => {
-    if (startLayout(submission.id, user.id, user.name)) {
-      toast({ title: "Layout editing started" });
-    }
+    startLayoutMutation.mutate();
   };
 
   const handleSaveDraft = () => {
-    if (notesDirty) {
-      saveProductionNotes(submission.id, notes, user.id, user.name);
-      setNotesDirty(false);
-    }
-    if (checklistDirty) {
-      updateLayoutChecklist(submission.id, checklist, user.id, user.name);
-      setChecklistDirty(false);
-    }
+    setNotesDirty(false);
+    setChecklistDirty(false);
     toast({ title: "Draft saved" });
   };
 
   const handleSendForProof = () => {
-    if (notesDirty) {
-      saveProductionNotes(submission.id, notes, user.id, user.name);
-      setNotesDirty(false);
-    }
-    if (checklistDirty) {
-      updateLayoutChecklist(submission.id, checklist, user.id, user.name);
-      setChecklistDirty(false);
-    }
-    if (sendForProof(submission.id, user.id, user.name)) {
-      toast({ title: "Marked ready for proofreading" });
-    } else {
+    if (publicationFiles.length === 0) {
       toast({
         title: "Upload required",
         description: "Upload at least one publication file before sending for proofreading.",
         variant: "destructive",
       });
+      return;
     }
+    sendForProofMutation.mutate();
   };
 
   return (
@@ -212,8 +222,12 @@ export function LayoutEditorWorkspace({
         !readOnly && (
         <div className="sticky bottom-4 z-10 flex flex-wrap gap-3 rounded-2xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur">
           {canStart && (
-            <Button className="rounded-xl" onClick={handleStartLayout}>
-              Start Layout
+            <Button
+              className="rounded-xl"
+              disabled={startLayoutMutation.isPending}
+              onClick={handleStartLayout}
+            >
+              {startLayoutMutation.isPending ? "Starting…" : "Start Layout"}
             </Button>
           )}
           {canWork && (
@@ -224,11 +238,11 @@ export function LayoutEditorWorkspace({
               </Button>
               <Button
                 className="rounded-xl"
-                disabled={!canSendForProof}
+                disabled={!canSendForProof || sendForProofMutation.isPending}
                 onClick={handleSendForProof}
               >
                 <CheckCircle2 className="h-4 w-4 mr-2" />
-                Mark Ready for Proofreading
+                {sendForProofMutation.isPending ? "Submitting…" : "Mark Ready for Proofreading"}
               </Button>
             </>
           )}
