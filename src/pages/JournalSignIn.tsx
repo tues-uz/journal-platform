@@ -17,6 +17,7 @@ import { authApi } from "@/lib/api/auth";
 import { ApiClientError } from "@/lib/api/client";
 import { SEED_DEMO_AUTHORS, SEED_USERS } from "@/lib/store/seed";
 import { ROLE_LABELS } from "@/lib/rbac/types";
+import { isDemoMode } from "@/lib/demo/mode";
 
 const HERO_IMAGE =
   "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=2000&q=80";
@@ -41,6 +42,7 @@ const JournalSignIn = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { login, isAuthenticated } = useAuth();
+  const demoMode = isDemoMode();
   const redirectFeedback = getRedirectFeedback(redirectStatus);
 
   useEffect(() => {
@@ -250,46 +252,58 @@ const JournalSignIn = () => {
           </div>
         </section>
 
-        <section className="bg-white px-6 py-20 md:py-28">
-          <div className="mx-auto max-w-7xl">
-            <div className="mb-8 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-sm font-semibold tracking-wide text-gray-500 uppercase">Demo</p>
-                <h2 className="mt-1 font-serif text-3xl font-bold tracking-wide text-black md:text-4xl">
-                  Try a role
-                </h2>
+        {demoMode ? (
+          <section className="bg-white px-6 py-20 md:py-28">
+            <div className="mx-auto max-w-7xl">
+              <div className="mb-8 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold tracking-wide text-gray-500 uppercase">Demo</p>
+                  <h2 className="mt-1 font-serif text-3xl font-bold tracking-wide text-black md:text-4xl">
+                    Try a role
+                  </h2>
+                </div>
+                <p className="max-w-md text-sm leading-relaxed text-gray-600">
+                  Pick an account to pre-fill the form above, then sign in.
+                </p>
               </div>
-              <p className="max-w-md text-sm leading-relaxed text-gray-600">
-                Pick an account to pre-fill the form above, then sign in.
+
+              <ul className="grid gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
+                {DEMO_ACCOUNTS.map((acc) => (
+                  <li key={acc.email}>
+                    <button
+                      type="button"
+                      onClick={() => fillDemo(acc.email, acc.password)}
+                      className="group flex w-full items-center justify-between border-b border-gray-200 py-3.5 text-left transition-colors hover:border-gray-400"
+                    >
+                      <span className="min-w-0 pr-3">
+                        <span className="block text-sm font-medium text-gray-900 group-hover:text-black">
+                          {acc.name}
+                        </span>
+                        <span className="mt-1 block truncate text-xs text-gray-500">{acc.roles}</span>
+                      </span>
+                      <span
+                        aria-hidden
+                        className="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500"
+                      >
+                        →
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        ) : (
+          <section className="border-t border-gray-200 bg-gray-50 px-6 py-12 md:py-16">
+            <div className="mx-auto max-w-2xl text-center">
+              <p className="text-sm font-medium text-gray-900">Production sign-in</p>
+              <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                Demo accounts are only available in offline demo mode. Use your registered email and
+                password, or contact the journal administrator.
               </p>
             </div>
-
-            <ul className="grid gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
-              {DEMO_ACCOUNTS.map((acc) => (
-                <li key={acc.email}>
-                  <button
-                    type="button"
-                    onClick={() => fillDemo(acc.email, acc.password)}
-                    className="group flex w-full items-center justify-between border-b border-gray-200 py-3.5 text-left transition-colors hover:border-gray-400"
-                  >
-                    <span className="min-w-0 pr-3">
-                      <span className="block text-sm font-medium text-gray-900 group-hover:text-black">
-                        {acc.name}
-                      </span>
-                      <span className="mt-1 block truncate text-xs text-gray-500">{acc.roles}</span>
-                    </span>
-                    <span
-                      aria-hidden
-                      className="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500"
-                    >
-                      →
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
+          </section>
+        )}
       </main>
 
       <Footer />

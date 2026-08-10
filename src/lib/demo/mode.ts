@@ -1,5 +1,6 @@
-/** Offline demo mode — active when no remote API URL is configured. */
+/** Offline demo mode — local seed store instead of a remote API. */
 export function isDemoMode(): boolean {
+  if (import.meta.env.VITE_DEMO_MODE === "true") return true;
   return !import.meta.env.VITE_API_URL;
 }
 

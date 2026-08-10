@@ -1293,7 +1293,11 @@ export const useJournalStore = create<JournalStore>()(
             users: mergeMissingSeedStaff(base.users),
           };
         }
-        return persistedState as typeof SEED_DATA;
+        const state = persistedState as typeof SEED_DATA;
+        return {
+          ...state,
+          users: mergeMissingSeedStaff(state.users ?? SEED_DATA.users),
+        };
       },
       partialize: (state) => ({
         users: state.users,

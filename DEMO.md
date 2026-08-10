@@ -1,6 +1,6 @@
 # Offline Demo Mode
 
-Demo mode is active when **no** `VITE_API_URL` is set (rename `.env` to `.env.disabled` if needed). Sign in at `/signin` — all accounts are listed on the page.
+Demo mode is active when **no** `VITE_API_URL` is set, or when `VITE_DEMO_MODE=true` (used on Vercel demo deploys). Sign in at `/signin` — demo accounts are listed on the page in demo mode.
 
 ## Dummy accounts
 

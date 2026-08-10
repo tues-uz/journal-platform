@@ -11,7 +11,7 @@ import type {
 } from "@/lib/store/types";
 
 /** Bump when seed shape changes so persisted localStorage picks up new demo data. */
-export const SEED_VERSION = 18;
+export const SEED_VERSION = 19;
 
 /** Staff demo accounts only — authors self-register and create their own submissions. */
 export const SEED_USERS: StoreUser[] = [
@@ -796,7 +796,7 @@ export const SEED_DEMO_SUBMISSION_IDS = new Set([
 export function mergeMissingSeedStaff(users: StoreUser[]): StoreUser[] {
   const knownEmails = new Set(users.map((user) => user.email.toLowerCase()));
   const knownIds = new Set(users.map((user) => user.id));
-  const missing = SEED_USERS.filter(
+  const missing = [...SEED_USERS, ...SEED_DEMO_AUTHORS].filter(
     (seedUser) =>
       !knownEmails.has(seedUser.email.toLowerCase()) && !knownIds.has(seedUser.id),
   );
