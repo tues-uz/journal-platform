@@ -40,6 +40,19 @@ describe("demo handling editor assignment", () => {
     );
     expect(editor2Submissions.some((entry) => entry.id === "sub-001")).toBe(true);
   });
+
+  it("assigns multiple handling editors via sequential single invites", async () => {
+    await workflowApi.assignEditor("sub-001", "user-he");
+    await workflowApi.assignEditor("sub-001", "user-he2");
+    await workflowApi.assignEditor("sub-001", "user-he3");
+
+    const submission = await submissionsApi.get("sub-001");
+
+    expect(submission.status).toBe("assigned");
+    expect(submission.handlingEditorIds).toEqual(
+      expect.arrayContaining(["user-he", "user-he2", "user-he3"]),
+    );
+  });
 });
 
 describe("demo production workflow", () => {

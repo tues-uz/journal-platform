@@ -67,7 +67,10 @@ interface PresignedUploadResponseDto {
 export const usersApi = {
   async candidates(role: "HANDLING_EDITOR" | "REVIEWER"): Promise<UserCandidate[]> {
     const dtos = await apiRequest<UserSummaryDto[]>("/api/users/candidates", { params: { role } });
-    return dtos.map((dto) => ({ id: String(dto.id), name: dto.name }));
+    return dtos.map((dto) => ({
+      id: isDemoMode() ? (fromNumericUserId(dto.id) ?? String(dto.id)) : String(dto.id),
+      name: dto.name,
+    }));
   },
 
   async list(page = 0, size = 200): Promise<ManagedUser[]> {

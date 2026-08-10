@@ -32,9 +32,11 @@ export const workflowApi = {
 
   assignEditor(id: string, editorIds: string | string[]) {
     const ids = Array.isArray(editorIds) ? editorIds : [editorIds];
-    return call(`/api/submissions/${id}/assign-editor`, {
-      editorIds: isDemoMode() ? ids : ids.map((editorId) => Number(editorId)),
-    });
+    const body =
+      ids.length === 1
+        ? { editorId: isDemoMode() ? ids[0] : Number(ids[0]) }
+        : { editorIds: isDemoMode() ? ids : ids.map((editorId) => Number(editorId)) };
+    return call(`/api/submissions/${id}/assign-editor`, body);
   },
 
   inviteReviewer(id: string, reviewerId: string) {

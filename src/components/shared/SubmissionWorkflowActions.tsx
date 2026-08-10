@@ -999,6 +999,19 @@ function HandlingEditorAssignmentPanel({
 
   return (
     <Card className="mb-4 overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
+      <div className="border-b border-border/60 px-5 py-5">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Editor in Chief
+        </p>
+        <h3 className="mt-1 font-sans text-lg font-semibold text-foreground">
+          Assign handling editors
+        </h3>
+        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Select one or more editors below, then click Invite. You can invite additional editors
+          later.
+        </p>
+      </div>
+
       <div className="border-b border-border/60 px-4 py-4">
         <div className="relative">
           <Search
@@ -1277,9 +1290,11 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
     "Handling Editor";
 
   const toggleSelectedEditor = (editorId: string, checked: boolean) => {
-    setSelectedEditors((current) =>
-      checked ? [...current, editorId] : current.filter((id) => id !== editorId),
-    );
+    setSelectedEditors((current) => {
+      if (!checked) return current.filter((id) => id !== editorId);
+      if (current.includes(editorId)) return current;
+      return [...current, editorId];
+    });
   };
 
   // ── EIC / Admin: Assign Handling Editor(s) ──
@@ -1308,9 +1323,11 @@ export function SubmissionWorkflowActions({ submission }: SubmissionWorkflowActi
             inviteEditors: editors,
             confirmLabel: editors.length === 1 ? "Send invite" : "Send invites",
             onConfirm: async () => {
-              await mutation.mutateAsync(() =>
-                workflowApi.assignEditor(submission.id, selectedEditors),
-              );
+              for (const editorId of selectedEditors) {
+                await mutation.mutateAsync(() =>
+                  workflowApi.assignEditor(submission.id, editorId),
+                );
+              }
               toast({
                 title:
                   selectedEditors.length === 1

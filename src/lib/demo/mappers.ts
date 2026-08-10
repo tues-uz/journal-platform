@@ -303,12 +303,16 @@ export function managedUserFromStore(user: StoreUser): ManagedUser {
 export function resolveEditorIdsFromBody(body: Record<string, unknown>): string[] {
   if (Array.isArray(body.editorIds)) {
     return body.editorIds
-      .map((value) =>
-        typeof value === "string" ? value : fromNumericUserId(value as number),
-      )
+      .map((value) => {
+        if (typeof value === "number") return fromNumericUserId(value);
+        const resolved = fromNumericUserId(value);
+        return resolved ?? (typeof value === "string" ? value : undefined);
+      })
       .filter((value): value is string => !!value);
   }
-  if (typeof body.editorId === "string") return [body.editorId];
+  if (typeof body.editorId === "string") {
+    return [fromNumericUserId(body.editorId) ?? body.editorId];
+  }
   const numeric = fromNumericUserId(body.editorId as number);
   return numeric ? [numeric] : [];
 }
